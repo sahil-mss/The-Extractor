@@ -1,0 +1,33 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Local databases & state
+*.db
+*.sqlite3
+extractor.db
+
+# Configuration and secrets
+config.yaml
+cookies.txt
+.env
+.env.*
+
+# Downloaded files & temporary scratch files
+downloads/*
+!downloads/.gitkeep
+
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log

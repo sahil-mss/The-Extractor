@@ -67,7 +67,7 @@ class AudacityRequest(BaseModel):
 def open_system_folder(folder_path: str):
     system = platform.system()
     if system == "Windows":
-        os.startfile(folder_path)
+        subprocess.Popen(["explorer", os.path.normpath(folder_path)])
     elif system == "Darwin":
         subprocess.Popen(["open", folder_path])
     else:
