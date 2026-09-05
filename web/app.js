@@ -1,5 +1,5 @@
 // ==========================================================================
-// THE EXTRACTOR — CLIENT INTERACTION ENGINE
+// THE EXTRACTOR — V2.5 CLIENT SCRIPT (BATCH, HISTORY & FORMATS)
 // ==========================================================================
 
 const API_BASE = "";
@@ -8,15 +8,33 @@ const API_BASE = "";
 let currentVideoData = null;
 let activeTaskId = null;
 let pollTimer = null;
+let activeTasksMap = new Map();
+let batchPollTimer = null;
 
-// DOM Elements
+// Tab Elements
+const tabSingle = document.getElementById("tabSingle");
+const tabBatch = document.getElementById("tabBatch");
+const singleInputCard = document.getElementById("singleInputCard");
+const batchInputCard = document.getElementById("batchInputCard");
+
+// Single Mode Elements
 const ytUrlInput = document.getElementById("ytUrlInput");
 const pasteBtn = document.getElementById("pasteBtn");
 const inspectBtn = document.getElementById("inspectBtn");
 const inspectLoader = document.getElementById("inspectLoader");
+const loaderStatusText = document.getElementById("loaderStatusText");
 const errorBanner = document.getElementById("errorBanner");
 const errorMessage = document.getElementById("errorMessage");
 const resultSection = document.getElementById("resultSection");
+
+// Batch Elements
+const batchUrlsInput = document.getElementById("batchUrlsInput");
+const batchPasteBtn = document.getElementById("batchPasteBtn");
+const startBatchBtn = document.getElementById("startBatchBtn");
+const batchCount = document.getElementById("batchCount");
+const batchQueueSection = document.getElementById("batchQueueSection");
+const queueList = document.getElementById("queueList");
+const clearQueueBtn = document.getElementById("clearQueueBtn");
 
 // Preview Elements
 const videoThumb = document.getElementById("videoThumb");
@@ -31,7 +49,9 @@ const tagsCount = document.getElementById("tagsCount");
 const transcriptContainer = document.getElementById("transcriptContainer");
 const transcriptStatus = document.getElementById("transcriptStatus");
 
-// Option Checkboxes
+// Customization & Options
+const selResolution = document.getElementById("selResolution");
+const selAudio = document.getElementById("selAudio");
 const optVideo = document.getElementById("optVideo");
 const optAudio = document.getElementById("optAudio");
 const optDoc = document.getElementById("optDoc");
@@ -46,7 +66,20 @@ const progressSpeed = document.getElementById("progressSpeed");
 const progressEta = document.getElementById("progressEta");
 const finishedActions = document.getElementById("finishedActions");
 
-// Action Triggers
+// History & Settings Modals
+const navHistoryBtn = document.getElementById("navHistoryBtn");
+const historyCountBadge = document.getElementById("historyCountBadge");
+const historyModal = document.getElementById("historyModal");
+const closeHistoryBtn = document.getElementById("closeHistoryBtn");
+const clearHistoryBtn = document.getElementById("clearHistoryBtn");
+const historyListContainer = document.getElementById("historyListContainer");
+
+const navSettingsBtn = document.getElementById("navSettingsBtn");
+const settingsModal = document.getElementById("settingsModal");
+const closeSettingsBtn = document.getElementById("closeSettingsBtn");
+const settingsContent = document.getElementById("settingsContent");
+
+// Quick Actions
 const openFolderBtn = document.getElementById("openFolderBtn");
 const openAudacityBtn = document.getElementById("openAudacityBtn");
 const openFolderActionBtn = document.getElementById("openFolderActionBtn");
@@ -65,7 +98,6 @@ function showToast(msg) {
   }, 2500);
 }
 
-// Error Utility
 function showError(msg) {
   errorMessage.textContent = msg;
   errorBanner.classList.remove("hidden");
@@ -76,7 +108,23 @@ function clearError() {
   errorBanner.classList.add("hidden");
 }
 
-// 1. Clipboard Paste Handler
+// 1. Tab Navigation
+tabSingle.addEventListener("click", () => {
+  tabSingle.classList.add("active");
+  tabBatch.classList.remove("active");
+  singleInputCard.classList.remove("hidden");
+  batchInputCard.classList.add("hidden");
+});
+
+tabBatch.addEventListener("click", () => {
+  tabBatch.classList.add("active");
+  tabSingle.classList.remove("active");
+  batchInputCard.classList.remove("hidden");
+  singleInputCard.classList.add("hidden");
+  resultSection.classList.add("hidden");
+});
+
+// 2. Single Video Paste & Input
 pasteBtn.addEventListener("click", async () => {
   try {
     const text = await navigator.clipboard.readText();
@@ -90,30 +138,157 @@ pasteBtn.addEventListener("click", async () => {
   }
 });
 
-// 2. Input Enter Key
 ytUrlInput.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") {
-    inspectVideo();
+  if (e.key === "Enter") inspectVideo();
+});
+
+inspectBtn.addEventListener("click", () => inspectVideo());
+
+// 3. Batch Input Handlers
+batchPasteBtn.addEventListener("click", async () => {
+  try {
+    const text = await navigator.clipboard.readText();
+    if (text) {
+      batchUrlsInput.value = text.trim();
+      updateBatchCount();
+    }
+  } catch (err) {
+    batchUrlsInput.focus();
   }
 });
 
-inspectBtn.addEventListener("click", () => {
-  inspectVideo();
+batchUrlsInput.addEventListener("input", updateBatchCount);
+
+function updateBatchCount() {
+  const urls = getBatchUrls();
+  batchCount.textContent = urls.length;
+}
+
+function getBatchUrls() {
+  const raw = batchUrlsInput.value.trim();
+  if (!raw) return [];
+  return raw
+    .split(/[\n,]+/)
+    .map((u) => u.trim())
+    .filter((u) => u.length > 5);
+}
+
+startBatchBtn.addEventListener("click", async () => {
+  const urls = getBatchUrls();
+  if (!urls.length) {
+    showToast("Please enter at least one URL");
+    return;
+  }
+
+  const [audioCodec, audioBitrate] = selAudio.value.split("-");
+  const payload = {
+    urls: urls,
+    download_video: optVideo.checked,
+    download_audio: optAudio.checked,
+    download_doc: optDoc.checked,
+    video_resolution: selResolution.value,
+    audio_format: audioCodec,
+    audio_bitrate: audioBitrate,
+  };
+
+  try {
+    startBatchBtn.disabled = true;
+    startBatchBtn.textContent = "Queueing...";
+    const res = await fetch(`${API_BASE}/api/batch-download`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Failed to start batch");
+
+    showToast(`Queued ${data.total} item(s)!`);
+    batchQueueSection.classList.remove("hidden");
+
+    data.tasks.forEach((t) => {
+      activeTasksMap.set(t.task_id, {
+        task_id: t.task_id,
+        url: t.url,
+        status: "queued",
+        percent: "0%",
+      });
+    });
+
+    renderQueue();
+    startBatchPolling();
+    batchUrlsInput.value = "";
+    updateBatchCount();
+  } catch (err) {
+    showError(err.message);
+  } finally {
+    startBatchBtn.disabled = false;
+    startBatchBtn.textContent = `Queue Batch Download (${getBatchUrls().length} items)`;
+  }
 });
 
-// 3. Inspect YouTube Video Metadata
+function renderQueue() {
+  queueList.innerHTML = "";
+  activeTasksMap.forEach((task) => {
+    const item = document.createElement("div");
+    item.className = "queue-item";
+    item.innerHTML = `
+      <div class="queue-info">
+        <span class="queue-url">${escapeHtml(task.url)}</span>
+        <span class="queue-status-text">${escapeHtml(task.message || task.percent || "")}</span>
+      </div>
+      <span class="queue-status-badge status-${task.status}">${task.status}</span>
+    `;
+    queueList.appendChild(item);
+  });
+}
+
+function startBatchPolling() {
+  if (batchPollTimer) return;
+  batchPollTimer = setInterval(async () => {
+    let allFinished = true;
+    for (const [taskId, task] of activeTasksMap.entries()) {
+      if (task.status === "completed" || task.status === "error") continue;
+      allFinished = false;
+      try {
+        const res = await fetch(`${API_BASE}/api/progress/${taskId}`);
+        if (res.ok) {
+          const update = await res.json();
+          activeTasksMap.set(taskId, { ...task, ...update });
+        }
+      } catch (e) {}
+    }
+    renderQueue();
+    if (allFinished) {
+      clearInterval(batchPollTimer);
+      batchPollTimer = null;
+      loadHistory();
+      showToast("Batch processing completed!");
+    }
+  }, 1000);
+}
+
+clearQueueBtn.addEventListener("click", () => {
+  for (const [id, t] of activeTasksMap.entries()) {
+    if (t.status === "completed" || t.status === "error") {
+      activeTasksMap.delete(id);
+    }
+  }
+  renderQueue();
+  if (activeTasksMap.size === 0) batchQueueSection.classList.add("hidden");
+});
+
+// 4. Single Video Inspection
 async function inspectVideo() {
   const url = ytUrlInput.value.trim();
   if (!url) {
-    showError("Please enter a valid YouTube video or shorts link.");
+    showToast("Please enter a YouTube URL");
     return;
   }
 
   clearError();
-  inspectLoader.classList.remove("hidden");
   resultSection.classList.add("hidden");
-  progressCard.classList.add("hidden");
-  finishedActions.classList.add("hidden");
+  inspectLoader.classList.remove("hidden");
+  loaderStatusText.textContent = "Analyzing metadata, tags, and transcript...";
 
   try {
     const res = await fetch(`${API_BASE}/api/inspect`, {
@@ -123,124 +298,106 @@ async function inspectVideo() {
     });
 
     const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.detail || "Failed to retrieve video information");
+    if (!res.ok) throw new Error(data.detail || "Inspection failed");
+
+    inspectLoader.classList.add("hidden");
+
+    if (data.is_playlist) {
+      showToast(`Playlist detected: ${data.playlist_count} videos! Switching to batch tab.`);
+      tabBatch.click();
+      batchUrlsInput.value = data.items.map((i) => i.url).join("\n");
+      updateBatchCount();
+      return;
     }
 
     currentVideoData = data.data;
-    renderVideoDetails(currentVideoData);
-    inspectLoader.classList.add("hidden");
+    renderVideoWorkspace(currentVideoData);
     resultSection.classList.remove("hidden");
+    resultSection.scrollIntoView({ behavior: "smooth" });
   } catch (err) {
-    showError(err.message || "An unexpected error occurred while analyzing the video.");
+    showError(err.message);
   }
 }
 
-// 4. Render Video Inspection Results
-function renderVideoDetails(info) {
-  videoThumb.src = info.thumbnail;
-  videoDuration.textContent = info.duration_str;
-  videoTitle.textContent = info.title;
-  videoChannel.textContent = info.uploader;
-  videoViews.textContent = `${Number(info.view_count || 0).toLocaleString()} views`;
-  videoDate.textContent = info.upload_date || "Uploaded";
-  videoDesc.textContent = info.description || "No description provided.";
+function renderVideoWorkspace(v) {
+  videoThumb.src = v.thumbnail;
+  videoDuration.textContent = v.duration_str;
+  videoTitle.textContent = v.title;
+  videoChannel.textContent = v.uploader;
+  videoViews.textContent = Number(v.view_count).toLocaleString() + " views";
+  videoDate.textContent = v.upload_date || "Unknown Date";
+  videoDesc.textContent = v.description || "No description provided.";
 
-  // Render Tags Cloud
+  // Tags
   tagsContainer.innerHTML = "";
-  const tags = info.tags || [];
-  tagsCount.textContent = tags.length;
-
-  if (tags.length === 0) {
-    tagsContainer.innerHTML = '<span style="color: var(--text-dim); font-size: var(--text-xs);">No public tags found for this video.</span>';
-  } else {
-    tags.forEach((tag) => {
-      const pill = document.createElement("span");
-      pill.className = "tag-pill";
-      pill.textContent = `#${tag}`;
-      pill.title = "Click to copy tag";
-      pill.addEventListener("click", () => {
-        navigator.clipboard.writeText(tag);
-        showToast(`Copied tag: #${tag}`);
-      });
-      tagsContainer.appendChild(pill);
+  tagsCount.textContent = v.tags ? v.tags.length : 0;
+  if (v.tags && v.tags.length > 0) {
+    v.tags.forEach((tag) => {
+      const badge = document.createElement("span");
+      badge.className = "tag-badge";
+      badge.textContent = "#" + tag;
+      tagsContainer.appendChild(badge);
     });
+  } else {
+    tagsContainer.innerHTML = "<span class='empty-text'>No hidden tags discovered.</span>";
   }
 
-  // Render Transcripts
+  // Transcript
   transcriptContainer.innerHTML = "";
-  const transcript = info.transcript || [];
-  if (transcript.length === 0) {
-    transcriptStatus.textContent = "Unavailable";
-    transcriptContainer.innerHTML = '<div style="color: var(--text-dim); font-size: var(--text-xs); padding: var(--space-2);">No subtitles or auto-captions available for this video.</div>';
-  } else {
-    transcriptStatus.textContent = `${transcript.length} lines`;
-    transcript.forEach((line) => {
-      const item = document.createElement("div");
-      item.className = "transcript-item";
-
-      const ts = document.createElement("span");
-      ts.className = "ts-time";
-      ts.textContent = line.timestamp;
-
-      const txt = document.createElement("span");
-      txt.className = "ts-text";
-      txt.textContent = line.text;
-
-      item.appendChild(ts);
-      item.appendChild(txt);
-      transcriptContainer.appendChild(item);
+  if (v.has_transcript && v.transcript.length > 0) {
+    transcriptStatus.textContent = `${v.transcript.length} lines`;
+    v.transcript.forEach((t) => {
+      const row = document.createElement("div");
+      row.className = "transcript-item";
+      row.innerHTML = `<span class="transcript-timestamp">[${t.timestamp}]</span> ${escapeHtml(t.text)}`;
+      transcriptContainer.appendChild(row);
     });
-  }
-}
-
-// 5. Trigger Download Task
-downloadBtn.addEventListener("click", async () => {
-  if (!currentVideoData) return;
-
-  const url = currentVideoData.url;
-  const download_video = optVideo.checked;
-  const download_audio = optAudio.checked;
-  const download_doc = optDoc.checked;
-
-  if (!download_video && !download_audio && !download_doc) {
-    showToast("Please select at least one package option above.");
-    return;
+  } else {
+    transcriptStatus.textContent = "None";
+    transcriptContainer.innerHTML = "<p class='empty-text'>No captions or transcript available.</p>";
   }
 
-  progressCard.classList.remove("hidden");
+  // Reset Progress Card
+  progressCard.classList.add("hidden");
   finishedActions.classList.add("hidden");
   progressBar.style.width = "0%";
-  progressPercent.textContent = "0%";
-  progressPhaseText.textContent = "Initializing download...";
-  progressSpeed.textContent = "Speed: --";
-  progressEta.textContent = "ETA: --";
+}
+
+// 5. Download Execution (Single)
+downloadBtn.addEventListener("click", async () => {
+  if (!currentVideoData) return;
+  const [audioCodec, audioBitrate] = selAudio.value.split("-");
+
+  const payload = {
+    url: currentVideoData.url,
+    download_video: optVideo.checked,
+    download_audio: optAudio.checked,
+    download_doc: optDoc.checked,
+    video_resolution: selResolution.value,
+    audio_format: audioCodec,
+    audio_bitrate: audioBitrate,
+  };
 
   try {
+    downloadBtn.disabled = true;
     const res = await fetch(`${API_BASE}/api/download`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        url,
-        download_video,
-        download_audio,
-        download_doc,
-      }),
+      body: JSON.stringify(payload),
     });
-
     const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.detail || "Failed to start download");
-    }
+    if (!res.ok) throw new Error(data.detail || "Download failed to start");
 
     activeTaskId = data.task_id;
+    progressCard.classList.remove("hidden");
+    finishedActions.classList.add("hidden");
     startProgressPolling(activeTaskId);
   } catch (err) {
-    showError(err.message || "Failed to start download task");
+    showError(err.message);
+    downloadBtn.disabled = false;
   }
 });
 
-// 6. Poll Task Progress
 function startProgressPolling(taskId) {
   if (pollTimer) clearInterval(pollTimer);
 
@@ -248,100 +405,177 @@ function startProgressPolling(taskId) {
     try {
       const res = await fetch(`${API_BASE}/api/progress/${taskId}`);
       if (!res.ok) return;
-      const data = await res.json();
 
-      if (data.status === "running" || data.status === "queued") {
-        if (data.percent) {
-          progressBar.style.width = data.percent;
-          progressPercent.textContent = data.percent;
-        }
-        if (data.message) {
-          progressPhaseText.textContent = data.message;
-        }
-        if (data.speed) {
-          progressSpeed.textContent = `Speed: ${data.speed}`;
-        }
-        if (data.eta) {
-          progressEta.textContent = `ETA: ${data.eta}`;
-        }
-      } else if (data.status === "completed") {
+      const info = await res.json();
+      progressBar.style.width = info.percent || "0%";
+      progressPercent.textContent = info.percent || "0%";
+      progressPhaseText.textContent = info.message || "Processing...";
+      progressSpeed.textContent = info.speed ? `Speed: ${info.speed}` : "Speed: --";
+      progressEta.textContent = info.eta ? `ETA: ${info.eta}` : "ETA: --";
+
+      if (info.status === "completed") {
         clearInterval(pollTimer);
-        progressBar.style.width = "100%";
-        progressPercent.textContent = "100%";
-        progressPhaseText.textContent = "Complete!";
-        progressSpeed.textContent = "Done";
-        progressEta.textContent = "0s";
+        pollTimer = null;
+        downloadBtn.disabled = false;
         finishedActions.classList.remove("hidden");
-        showToast("Download and extraction completed!");
-      } else if (data.status === "error") {
+        loadHistory();
+      } else if (info.status === "error") {
         clearInterval(pollTimer);
-        showError(data.message || "An error occurred during download.");
+        pollTimer = null;
+        downloadBtn.disabled = false;
+        showError(info.message);
       }
-    } catch (err) {
-      console.error("Polling error:", err);
+    } catch (e) {
+      console.error(e);
     }
-  }, 600);
+  }, 500);
 }
 
-// 7. Action Triggers
-async function openFolder() {
+// 6. History Drawer Management
+navHistoryBtn.addEventListener("click", () => {
+  loadHistory();
+  historyModal.classList.remove("hidden");
+});
+closeHistoryBtn.addEventListener("click", () => historyModal.classList.add("hidden"));
+
+async function loadHistory() {
   try {
-    await fetch(`${API_BASE}/api/open-folder`, { method: "POST" });
-    showToast("Opened downloads folder in File Explorer");
+    const res = await fetch(`${API_BASE}/api/history`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const records = data.history || [];
+    historyCountBadge.textContent = records.length;
+
+    if (!records.length) {
+      historyListContainer.innerHTML = "<p class='empty-state'>No extraction history yet.</p>";
+      return;
+    }
+
+    let html = `<table class="history-table">
+      <thead>
+        <tr>
+          <th>Title / URL</th>
+          <th>Channel</th>
+          <th>Date</th>
+          <th>Status</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>`;
+
+    records.forEach((r) => {
+      html += `
+        <tr>
+          <td><strong>${escapeHtml(r.title || r.url)}</strong></td>
+          <td>${escapeHtml(r.channel || "--")}</td>
+          <td>${r.created_at || "--"}</td>
+          <td><span class="queue-status-badge status-${r.status}">${r.status}</span></td>
+          <td>
+            <button class="btn btn-ghost btn-sm" onclick="deleteHistoryItem(${r.id})">Delete</button>
+          </td>
+        </tr>`;
+    });
+
+    html += `</tbody></table>`;
+    historyListContainer.innerHTML = html;
   } catch (err) {
-    showToast("Could not open downloads folder");
+    console.error("Failed to load history:", err);
   }
 }
 
-async function openAudacity() {
+window.deleteHistoryItem = async function (id) {
+  try {
+    await fetch(`${API_BASE}/api/history/${id}`, { method: "DELETE" });
+    loadHistory();
+  } catch (e) {
+    showToast("Failed to delete record");
+  }
+};
+
+clearHistoryBtn.addEventListener("click", async () => {
+  if (confirm("Are you sure you want to clear all extraction history?")) {
+    await fetch(`${API_BASE}/api/history`, { method: "DELETE" });
+    loadHistory();
+  }
+});
+
+// 7. Settings Drawer
+navSettingsBtn.addEventListener("click", async () => {
+  try {
+    const res = await fetch(`${API_BASE}/api/config`);
+    const cfg = await res.json();
+    settingsContent.innerHTML = `
+      <div style="font-size: 0.9rem; line-height: 1.6;">
+        <p><strong>Downloads Directory:</strong> <code>${escapeHtml(cfg.download_dir)}</code></p>
+        <p><strong>Audacity Binary:</strong> <code>${escapeHtml(cfg.audacity_path)}</code> (${cfg.audacity_detected ? "✅ Detected" : "⚠️ Not Found"})</p>
+        <p><strong>Cookies Configured:</strong> ${cfg.has_cookies ? "✅ Yes (cookies.txt)" : "❌ No"}</p>
+        <p><strong>API Auth Enabled:</strong> ${cfg.auth_enabled ? "🔒 Yes" : "🔓 Public / Local"}</p>
+        <p style="margin-top: 1rem; color: var(--text-secondary);">Edit <code>config.yaml</code> to adjust quality presets, Audacity path, API tokens, and concurrency.</p>
+      </div>
+    `;
+    settingsModal.classList.remove("hidden");
+  } catch (e) {
+    showToast("Failed to fetch settings");
+  }
+});
+closeSettingsBtn.addEventListener("click", () => settingsModal.classList.add("hidden"));
+
+// 8. Clipboard Actions
+copyTagsBtn.addEventListener("click", () => {
+  if (currentVideoData && currentVideoData.tags) {
+    navigator.clipboard.writeText(currentVideoData.tags.join(", "));
+    showToast("Tags copied!");
+  }
+});
+
+copyTranscriptBtn.addEventListener("click", () => {
+  if (currentVideoData && currentVideoData.transcript) {
+    const txt = currentVideoData.transcript.map((t) => `[${t.timestamp}] ${t.text}`).join("\n");
+    navigator.clipboard.writeText(txt);
+    showToast("Transcript copied!");
+  }
+});
+
+copyDescBtn.addEventListener("click", () => {
+  if (currentVideoData && currentVideoData.description) {
+    navigator.clipboard.writeText(currentVideoData.description);
+    showToast("Description copied!");
+  }
+});
+
+// 9. OS Launchers
+openFolderBtn.addEventListener("click", () => fetch(`${API_BASE}/api/open-folder`, { method: "POST" }));
+openFolderActionBtn.addEventListener("click", () => fetch(`${API_BASE}/api/open-folder`, { method: "POST" }));
+
+openAudacityBtn.addEventListener("click", () => triggerAudacity());
+openAudacityActionBtn.addEventListener("click", () => triggerAudacity());
+
+async function triggerAudacity() {
   try {
     const res = await fetch(`${API_BASE}/api/open-audacity`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({}),
     });
-    const data = await res.json();
-    if (res.ok) {
-      showToast("Launched Audacity with latest audio track!");
-    } else {
-      showToast(data.detail || "Could not launch Audacity");
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail);
     }
-  } catch (err) {
-    showToast("Failed to launch Audacity");
+    showToast("Audacity launched!");
+  } catch (e) {
+    showToast(e.message || "Failed to launch Audacity");
   }
 }
 
-openFolderBtn.addEventListener("click", openFolder);
-openFolderActionBtn.addEventListener("click", openFolder);
-openAudacityBtn.addEventListener("click", openAudacity);
-openAudacityActionBtn.addEventListener("click", openAudacity);
+function escapeHtml(str) {
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
 
-// 8. Copy Utilities
-copyTagsBtn.addEventListener("click", () => {
-  if (!currentVideoData || !currentVideoData.tags || currentVideoData.tags.length === 0) {
-    showToast("No tags to copy");
-    return;
-  }
-  const tagsStr = currentVideoData.tags.join(", ");
-  navigator.clipboard.writeText(tagsStr);
-  showToast(`Copied ${currentVideoData.tags.length} tags to clipboard!`);
-});
-
-copyTranscriptBtn.addEventListener("click", () => {
-  if (!currentVideoData || !currentVideoData.transcript || currentVideoData.transcript.length === 0) {
-    showToast("No transcript to copy");
-    return;
-  }
-  const text = currentVideoData.transcript.map((l) => `[${l.timestamp}] ${l.text}`).join("\n");
-  navigator.clipboard.writeText(text);
-  showToast("Full transcript copied to clipboard!");
-});
-
-copyDescBtn.addEventListener("click", () => {
-  if (!currentVideoData || !currentVideoData.description) {
-    showToast("No description to copy");
-    return;
-  }
-  navigator.clipboard.writeText(currentVideoData.description);
-  showToast("Description copied to clipboard!");
-});
+// Initial Load
+loadHistory();

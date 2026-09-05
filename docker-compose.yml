@@ -1,0 +1,15 @@
+version: "3.8"
+
+services:
+  extractor:
+    build: .
+    container_name: the_extractor
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./downloads:/app/downloads
+      - ./config.yaml:/app/config.yaml:ro
+    environment:
+      - EXTRACTOR_HOST=0.0.0.0
+      - EXTRACTOR_PORT=8000
+    restart: unless-stopped

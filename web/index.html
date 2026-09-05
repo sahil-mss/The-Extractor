@@ -4,30 +4,44 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>The Extractor — Video, Audio, Tags & Transcripts</title>
-  <!-- Google Fonts: Outfit & Inter for high-end typography -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <!-- Ambient Gradient Background Orbs -->
   <div class="glow-orb orb-top-left"></div>
   <div class="glow-orb orb-bottom-right"></div>
 
   <div class="app-container">
     <!-- Header -->
     <header class="app-header">
-      <div class="brand-badge">
-        <span class="pulse-dot"></span>
-        <span class="badge-text">v2.0 • Golden Ratio Edition</span>
+      <div class="header-top-row">
+        <div class="brand-badge">
+          <span class="pulse-dot"></span>
+          <span class="badge-text">v2.5 • Cross-Platform & Batch Edition</span>
+        </div>
+        <div class="header-actions">
+          <button id="navHistoryBtn" class="btn btn-ghost btn-sm">
+            📜 History (<span id="historyCountBadge">0</span>)
+          </button>
+          <button id="navSettingsBtn" class="btn btn-ghost btn-sm">
+            ⚙️ Settings
+          </button>
+        </div>
       </div>
       <h1 class="app-title">The <span class="gradient-text">Extractor</span></h1>
-      <p class="app-subtitle">Download high-definition video, separate audio for Audacity, extract hidden tags, and generate comprehensive transcript documentation.</p>
+      <p class="app-subtitle">Batch & playlist media downloader, tag inspector, timestamped transcript generator, and cross-platform Audacity audio studio.</p>
     </header>
 
-    <!-- Main Input Card -->
-    <section class="card input-card">
+    <!-- Navigation Tabs (Single vs Batch) -->
+    <div class="tabs-bar">
+      <button class="tab-btn active" id="tabSingle">Single Video</button>
+      <button class="tab-btn" id="tabBatch">Batch & Playlists</button>
+    </div>
+
+    <!-- Mode 1: Single URL Card -->
+    <section class="card input-card" id="singleInputCard">
       <div class="input-group">
         <div class="input-icon">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -61,19 +75,33 @@
       <!-- Quick Shortcuts Bar -->
       <div class="quick-bar">
         <button id="openFolderBtn" class="quick-link">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-          </svg>
-          Open Downloads Folder
+          📁 Open Downloads Folder
         </button>
         <button id="openAudacityBtn" class="quick-link">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
-            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-            <line x1="12" y1="19" x2="12" y2="23"></line>
-            <line x1="8" y1="23" x2="16" y2="23"></line>
-          </svg>
-          Launch Audacity
+          🎙️ Launch Audacity
+        </button>
+      </div>
+    </section>
+
+    <!-- Mode 2: Batch & Playlist Input Card (Hidden by default) -->
+    <section class="card input-card hidden" id="batchInputCard">
+      <div class="batch-header">
+        <label for="batchUrlsInput" class="batch-label">Paste Multiple URLs or YouTube Playlist Link (one per line or comma-separated):</label>
+        <button id="batchPasteBtn" class="btn btn-ghost btn-sm">📋 Paste</button>
+      </div>
+      <textarea 
+        id="batchUrlsInput" 
+        class="batch-textarea" 
+        rows="4" 
+        placeholder="https://www.youtube.com/watch?v=...&#10;https://www.youtube.com/playlist?list=...&#10;https://youtu.be/..."
+      ></textarea>
+
+      <div class="batch-controls-row">
+        <div class="format-summary">
+          <span>Configured: <strong id="batchFormatSummary">MP4 (Best) + MP3 (192k) + Docs</strong></span>
+        </div>
+        <button id="startBatchBtn" class="btn btn-primary">
+          🚀 Queue Batch Download (<span id="batchCount">0</span> items)
         </button>
       </div>
     </section>
@@ -81,7 +109,7 @@
     <!-- Inspection Spinner / Loader -->
     <div id="inspectLoader" class="loader-container hidden">
       <div class="spinner"></div>
-      <p class="loader-text">Analyzing video metadata, tags, and transcript...</p>
+      <p class="loader-text" id="loaderStatusText">Analyzing video metadata, tags, and transcript...</p>
     </div>
 
     <!-- Error Banner -->
@@ -94,11 +122,24 @@
       <span id="errorMessage">Error text</span>
     </div>
 
-    <!-- Results Workspace (Hidden until inspected) -->
+    <!-- Batch Queue Monitor (Displays active and queued downloads) -->
+    <section id="batchQueueSection" class="card queue-card hidden">
+      <div class="section-header">
+        <div class="header-left">
+          <span class="section-badge badge-blue">Queue</span>
+          <h3 class="section-title">Active Batch Processing</h3>
+        </div>
+        <button id="clearQueueBtn" class="btn btn-ghost btn-sm">Dismiss Completed</button>
+      </div>
+      <div id="queueList" class="queue-list">
+        <!-- Rendered dynamically -->
+      </div>
+    </section>
+
+    <!-- Results Workspace (Single Video) -->
     <main id="resultSection" class="result-layout hidden">
-      <!-- Left Column: Video Preview & Download Options (Golden 61.8% Split) -->
+      <!-- Left Column: Video Preview & Download Options -->
       <div class="result-main">
-        <!-- Media Hero Card -->
         <article class="card media-hero-card">
           <div class="thumbnail-wrapper">
             <img id="videoThumb" src="" alt="Video Thumbnail" class="thumbnail-img">
@@ -114,6 +155,30 @@
               <span id="videoDate" class="meta-item">Date</span>
             </div>
 
+            <!-- Quality & Format Selectors -->
+            <div class="customization-bar">
+              <div class="selector-field">
+                <label for="selResolution">Video Quality:</label>
+                <select id="selResolution" class="select-dropdown">
+                  <option value="best">Best Available (HD/4K)</option>
+                  <option value="1080p">1080p Full HD</option>
+                  <option value="720p">720p HD</option>
+                  <option value="480p">480p SD</option>
+                </select>
+              </div>
+
+              <div class="selector-field">
+                <label for="selAudio">Audio Quality:</label>
+                <select id="selAudio" class="select-dropdown">
+                  <option value="mp3-192">MP3 (192 kbps - Standard)</option>
+                  <option value="mp3-320">MP3 (320 kbps - Studio)</option>
+                  <option value="mp3-128">MP3 (128 kbps - Voice)</option>
+                  <option value="wav-192">WAV (Lossless PCM)</option>
+                  <option value="m4a-192">M4A (AAC)</option>
+                </select>
+              </div>
+            </div>
+
             <!-- Download Options Selection -->
             <div class="download-selector-panel">
               <h3 class="panel-subtitle">Package Selection</h3>
@@ -123,8 +188,8 @@
                   <div class="pill-body">
                     <span class="pill-dot dot-cyan"></span>
                     <div class="pill-content">
-                      <span class="pill-title">Video (MP4 HD)</span>
-                      <span class="pill-desc">Best available resolution merged</span>
+                      <span class="pill-title">Video (MP4)</span>
+                      <span class="pill-desc">Selected resolution merged</span>
                     </div>
                   </div>
                 </label>
@@ -134,8 +199,8 @@
                   <div class="pill-body">
                     <span class="pill-dot dot-emerald"></span>
                     <div class="pill-content">
-                      <span class="pill-title">Audio (MP3)</span>
-                      <span class="pill-desc">192kbps for Audacity editing</span>
+                      <span class="pill-title">Audio File</span>
+                      <span class="pill-desc">Optimized for Audacity editing</span>
                     </div>
                   </div>
                 </label>
@@ -212,17 +277,14 @@
               <h3 class="section-title">Video Description</h3>
             </div>
             <button class="btn-icon" id="copyDescBtn" title="Copy Description">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-              </svg>
+              📋
             </button>
           </div>
           <pre id="videoDesc" class="content-body pre-scrollable"></pre>
         </section>
       </div>
 
-      <!-- Right Column: Extracted Tags Cloud & Transcript Inspector (Golden 38.2% Split) -->
+      <!-- Right Column: Extracted Tags Cloud & Transcript Inspector -->
       <aside class="result-sidebar">
         <!-- Tags Card -->
         <section class="card tags-card">
@@ -232,16 +294,10 @@
               <h3 class="section-title">Extracted Tags (<span id="tagsCount">0</span>)</h3>
             </div>
             <button id="copyTagsBtn" class="btn btn-ghost btn-sm" title="Copy all tags comma-separated">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-              </svg>
-              Copy
+              📋 Copy
             </button>
           </div>
-          <div id="tagsContainer" class="tags-cloud">
-            <!-- Rendered dynamically -->
-          </div>
+          <div id="tagsContainer" class="tags-cloud"></div>
         </section>
 
         <!-- Transcript Card -->
@@ -252,19 +308,42 @@
               <h3 class="section-title">Transcript (<span id="transcriptStatus">Detected</span>)</h3>
             </div>
             <button id="copyTranscriptBtn" class="btn btn-ghost btn-sm" title="Copy full transcript">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-              </svg>
-              Copy
+              📋 Copy
             </button>
           </div>
-          <div id="transcriptContainer" class="transcript-list">
-            <!-- Rendered dynamically -->
-          </div>
+          <div id="transcriptContainer" class="transcript-list"></div>
         </section>
       </aside>
     </main>
+
+    <!-- History Drawer / Modal -->
+    <div id="historyModal" class="modal-overlay hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2>📜 Persistent Job History</h2>
+          <div class="modal-header-actions">
+            <button id="clearHistoryBtn" class="btn btn-ghost btn-sm text-danger">Clear All</button>
+            <button id="closeHistoryBtn" class="btn-icon">✖</button>
+          </div>
+        </div>
+        <div class="modal-body" id="historyListContainer">
+          <p class="empty-state">No extraction history yet.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings Drawer / Modal -->
+    <div id="settingsModal" class="modal-overlay hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2>⚙️ System Status & Configuration</h2>
+          <button id="closeSettingsBtn" class="btn-icon">✖</button>
+        </div>
+        <div class="modal-body" id="settingsContent">
+          <!-- Populated from /api/config -->
+        </div>
+      </div>
+    </div>
 
     <!-- Toast Notification -->
     <div id="toast" class="toast hidden">Copied to clipboard!</div>

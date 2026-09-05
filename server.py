@@ -1,52 +1,113 @@
 import os
+import platform
 import subprocess
 import threading
 import uuid
-from typing import Dict, Optional
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+import webbrowser
+from typing import Dict, List, Optional, Any
+from concurrent.futures import ThreadPoolExecutor
+
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Header, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from config import config
+import database
 import downloader
 
-app = FastAPI(title="The Extractor API", version="2.0.0")
+app = FastAPI(title="The Extractor API", version="2.5.0")
 
-# Allow CORS for local development
+# Setup CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=config.app.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-DOWNLOADS_DIR = os.path.abspath("downloads")
-os.makedirs(DOWNLOADS_DIR, exist_ok=True)
+# In-memory live task tracking
+TASKS: Dict[str, Dict[str, Any]] = {}
+executor = ThreadPoolExecutor(max_workers=config.processing.max_concurrent_downloads)
 
-# In-memory task tracking
-TASKS: Dict[str, Dict] = {}
+def verify_api_key(x_api_key: Optional[str] = Header(None)):
+    """Simple API Key verification if configured."""
+    if config.app.api_key:
+        if not x_api_key or x_api_key != config.app.api_key:
+            raise HTTPException(status_code=401, detail="Invalid or missing X-API-Key header")
+    return True
 
+# Pydantic Request Models
 class InspectRequest(BaseModel):
     url: str
 
 class DownloadRequest(BaseModel):
     url: str
-    download_video: bool = True
-    download_audio: bool = True
-    download_doc: bool = True
+    download_video: bool = config.defaults.download_video
+    download_audio: bool = config.defaults.download_audio
+    download_doc: bool = config.defaults.download_doc
+    video_resolution: str = config.defaults.video_resolution
+    audio_format: str = config.defaults.audio_format
+    audio_bitrate: str = config.defaults.audio_bitrate
+
+class BatchDownloadRequest(BaseModel):
+    urls: List[str]
+    download_video: bool = config.defaults.download_video
+    download_audio: bool = config.defaults.download_audio
+    download_doc: bool = config.defaults.download_doc
+    video_resolution: str = config.defaults.video_resolution
+    audio_format: str = config.defaults.audio_format
+    audio_bitrate: str = config.defaults.audio_bitrate
 
 class AudacityRequest(BaseModel):
     file_path: Optional[str] = None
 
+# Cross-platform folder opener
+def open_system_folder(folder_path: str):
+    system = platform.system()
+    if system == "Windows":
+        os.startfile(folder_path)
+    elif system == "Darwin":
+        subprocess.Popen(["open", folder_path])
+    else:
+        subprocess.Popen(["xdg-open", folder_path])
+
+@app.get("/api/config")
+def api_get_config(authorized: bool = Depends(verify_api_key)):
+    """Expose system configuration & detected binaries to frontend."""
+    audacity_bin = config.get_audacity_executable()
+    return {
+        "download_dir": config.absolute_download_dir,
+        "audacity_detected": bool(audacity_bin),
+        "audacity_path": audacity_bin or "Not Found",
+        "has_cookies": bool(config.paths.cookies_file and os.path.exists(config.paths.cookies_file)),
+        "auth_enabled": bool(config.app.api_key),
+        "defaults": config.defaults.model_dump(),
+    }
+
 @app.post("/api/inspect")
-def api_inspect(req: InspectRequest):
+def api_inspect(req: InspectRequest, authorized: bool = Depends(verify_api_key)):
     url = req.url.strip()
     if not url:
-        raise HTTPException(status_code=400, detail="YouTube URL is required")
+        raise HTTPException(status_code=400, detail="URL is required")
+
+    # Check if playlist
+    if downloader.is_playlist_url(url):
+        try:
+            items = downloader.expand_playlist_urls(url)
+            return {
+                "status": "success",
+                "is_playlist": True,
+                "playlist_count": len(items),
+                "items": items,
+            }
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to inspect playlist: {e}")
+
     try:
         data = downloader.inspect_video(url)
-        return {"status": "success", "data": data}
+        return {"status": "success", "is_playlist": False, "data": data}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -57,31 +118,48 @@ def run_download_task(task_id: str, req: DownloadRequest):
 
     try:
         TASKS[task_id]["status"] = "running"
-        TASKS[task_id]["message"] = "Starting process..."
+        TASKS[task_id]["message"] = "Processing download..."
+
         results = downloader.download_media_bundle(
             url=req.url,
-            output_dir=DOWNLOADS_DIR,
+            output_dir=config.absolute_download_dir,
             download_video=req.download_video,
             download_audio=req.download_audio,
             download_doc=req.download_doc,
+            video_resolution=req.video_resolution,
+            audio_format=req.audio_format,
+            audio_bitrate=req.audio_bitrate,
             progress_hook=progress_callback,
         )
+
         TASKS[task_id]["status"] = "completed"
         TASKS[task_id]["results"] = results
-        TASKS[task_id]["message"] = "Download and extraction complete!"
+        TASKS[task_id]["message"] = "Completed successfully!"
+
+        # Persist to database
+        database.record_task_completed(
+            task_id=task_id,
+            url=req.url,
+            info=results.get("info", {}),
+            results=results,
+        )
     except Exception as e:
         TASKS[task_id]["status"] = "error"
         TASKS[task_id]["message"] = str(e)
+        # Record failure in db
+        database.record_task_completed(
+            task_id=task_id,
+            url=req.url,
+            info={},
+            results={},
+            error_message=str(e),
+        )
 
-@app.post("/api/download")
-def api_download(req: DownloadRequest, background_tasks: BackgroundTasks):
-    url = req.url.strip()
-    if not url:
-        raise HTTPException(status_code=400, detail="YouTube URL is required")
-
+def enqueue_download(req: DownloadRequest) -> str:
     task_id = str(uuid.uuid4())
     TASKS[task_id] = {
         "task_id": task_id,
+        "url": req.url,
         "status": "queued",
         "phase": "init",
         "message": "Queued for download...",
@@ -90,11 +168,52 @@ def api_download(req: DownloadRequest, background_tasks: BackgroundTasks):
         "eta": "",
         "results": None
     }
+    database.record_task_created(task_id, req.url)
+    executor.submit(run_download_task, task_id, req)
+    return task_id
 
-    thread = threading.Thread(target=run_download_task, args=(task_id, req), daemon=True)
-    thread.start()
+@app.post("/api/download")
+def api_download(req: DownloadRequest, authorized: bool = Depends(verify_api_key)):
+    url = req.url.strip()
+    if not url:
+        raise HTTPException(status_code=400, detail="URL is required")
 
+    task_id = enqueue_download(req)
     return {"status": "started", "task_id": task_id}
+
+@app.post("/api/batch-download")
+def api_batch_download(req: BatchDownloadRequest, authorized: bool = Depends(verify_api_key)):
+    raw_urls = [u.strip() for u in req.urls if u.strip()]
+    if not raw_urls:
+        raise HTTPException(status_code=400, detail="At least one URL is required")
+
+    all_urls = []
+    # Expand playlists if any
+    for u in raw_urls:
+        if downloader.is_playlist_url(u):
+            try:
+                playlist_items = downloader.expand_playlist_urls(u)
+                all_urls.extend([p["url"] for p in playlist_items])
+            except Exception:
+                all_urls.append(u)
+        else:
+            all_urls.append(u)
+
+    task_ids = []
+    for u in all_urls:
+        sub_req = DownloadRequest(
+            url=u,
+            download_video=req.download_video,
+            download_audio=req.download_audio,
+            download_doc=req.download_doc,
+            video_resolution=req.video_resolution,
+            audio_format=req.audio_format,
+            audio_bitrate=req.audio_bitrate
+        )
+        task_id = enqueue_download(sub_req)
+        task_ids.append({"task_id": task_id, "url": u})
+
+    return {"status": "started", "tasks": task_ids, "total": len(task_ids)}
 
 @app.get("/api/progress/{task_id}")
 def api_progress(task_id: str):
@@ -102,32 +221,55 @@ def api_progress(task_id: str):
         raise HTTPException(status_code=404, detail="Task not found")
     return TASKS[task_id]
 
+# History Endpoints
+@app.get("/api/history")
+def api_get_history(limit: int = 50, offset: int = 0, authorized: bool = Depends(verify_api_key)):
+    records = database.get_history(limit=limit, offset=offset)
+    return {"status": "success", "history": records}
+
+@app.delete("/api/history/{item_id}")
+def api_delete_history(item_id: int, authorized: bool = Depends(verify_api_key)):
+    success = database.delete_history_item(item_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Item not found")
+    return {"status": "success", "deleted_id": item_id}
+
+@app.delete("/api/history")
+def api_clear_history(authorized: bool = Depends(verify_api_key)):
+    database.clear_all_history()
+    return {"status": "success", "message": "History cleared"}
+
+# OS Integration Endpoints
 @app.post("/api/open-folder")
 def api_open_folder():
     try:
-        if os.name == "nt":
-            os.startfile(DOWNLOADS_DIR)
-        else:
-            subprocess.Popen(["xdg-open", DOWNLOADS_DIR])
-        return {"status": "success", "folder": DOWNLOADS_DIR}
+        downloads_dir = config.absolute_download_dir
+        open_system_folder(downloads_dir)
+        return {"status": "success", "folder": downloads_dir}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/open-audacity")
 def api_open_audacity(req: AudacityRequest):
-    audacity_path = r"C:\Program Files\Audacity 4\bin\Audacity4.exe"
-    target_file = req.file_path
+    audacity_path = config.get_audacity_executable()
+    if not audacity_path:
+        raise HTTPException(
+            status_code=404,
+            detail="Audacity executable not found. Please install Audacity or configure its path in config.yaml"
+        )
 
-    # If no file specified, pick the most recent MP3 in the downloads folder
+    target_file = req.file_path
+    downloads_dir = config.absolute_download_dir
+
     if not target_file or not os.path.exists(target_file):
-        mp3s = [
-            os.path.join(DOWNLOADS_DIR, f)
-            for f in os.listdir(DOWNLOADS_DIR)
-            if f.lower().endswith(".mp3")
+        audio_files = [
+            os.path.join(downloads_dir, f)
+            for f in os.listdir(downloads_dir)
+            if f.lower().endswith((".mp3", ".wav", ".m4a"))
         ]
-        if mp3s:
-            mp3s.sort(key=os.path.getmtime, reverse=True)
-            target_file = mp3s[0]
+        if audio_files:
+            audio_files.sort(key=os.path.getmtime, reverse=True)
+            target_file = audio_files[0]
 
     try:
         args = [audacity_path]
@@ -138,11 +280,11 @@ def api_open_audacity(req: AudacityRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to launch Audacity: {e}")
 
-# Mount static web directory
+# Mount static web UI
 WEB_DIR = os.path.abspath("web")
 os.makedirs(WEB_DIR, exist_ok=True)
 app.mount("/", StaticFiles(directory=WEB_DIR, html=True), name="web")
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    uvicorn.run(app, host=config.app.host, port=config.app.port)

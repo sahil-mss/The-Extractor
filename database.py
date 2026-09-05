@@ -1,7 +1,7 @@
 import os
 import json
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
 
 DB_PATH = os.environ.get("EXTRACTOR_DB", "extractor.db")
@@ -61,7 +61,7 @@ def record_task_completed(
     cursor = conn.cursor()
 
     status = "completed" if not error_message else "error"
-    completed_at = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    completed_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
     doc_files = results.get("doc_files") or {}
     md_path = doc_files.get("md") if isinstance(doc_files, dict) else None
