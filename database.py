@@ -1,7 +1,7 @@
 import os
 import sqlite3
 from datetime import datetime, timezone
-from typing import List, Optional, Dict, Any
+from typing import Any
 
 DB_PATH = os.environ.get("EXTRACTOR_DB", "extractor.db")
 
@@ -48,9 +48,9 @@ def record_task_created(task_id: str, url: str) -> None:
 def record_task_completed(
     task_id: str,
     url: str,
-    info: Dict[str, Any],
-    results: Dict[str, Any],
-    error_message: Optional[str] = None
+    info: dict[str, Any],
+    results: dict[str, Any],
+    error_message: str | None = None
 ) -> None:
     status = "completed" if not error_message else "error"
     completed_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
@@ -101,7 +101,7 @@ def record_task_completed(
             completed_at
         ))
 
-def get_history(limit: int = 50, offset: int = 0) -> List[Dict[str, Any]]:
+def get_history(limit: int = 50, offset: int = 0) -> list[dict[str, Any]]:
     with get_db_connection() as conn:
         cursor = conn.execute("""
             SELECT * FROM extraction_history

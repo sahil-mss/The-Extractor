@@ -1,6 +1,5 @@
-import os
-import pytest
 import database
+
 
 def test_db_lifecycle(tmp_path):
     # Point database to temporary SQLite file

@@ -1,31 +1,30 @@
 # The Extractor 🎬🎙️📝
 
-> **A cross-platform media downloader, batch & playlist processor, tag inspector, timestamped transcript generator, and Audacity preparation suite.**
+> **A modern, cross-platform media downloader, batch & playlist processor, tag inspector, timestamped transcript generator, and Audacity audio studio.**
 
-[![Tests](https://img.shields.io/badge/tests-passing-brightgreen)]()
-[![Docker](https://img.shields.io/badge/docker-ready-blue)]()
+[![CI](https://github.com/sahil-mss/The-Extractor/actions/workflows/ci.yml/badge.svg)](https://github.com/sahil-mss/The-Extractor/actions/workflows/ci.yml)
+[![Docker](https://img.shields.io/badge/docker-ready-blue)](docker-compose.yml)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blueviolet)]()
-[![License](https://img.shields.io/badge/license-MIT-green)]()
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ---
 
 ## 📑 Table of Contents
 - [Overview](#overview)
 - [Key Features](#key-features)
+- [Quick Start](#quick-start)
+  - [1. Install & Run CLI (`extractor`)](#1-install--run-cli-extractor)
+  - [2. Run Directly with Python (`python main.py`)](#2-run-directly-with-python-python-mainpy)
+  - [3. Docker / Docker Compose](#3-docker--docker-compose)
+  - [4. Background System Service (Linux / VPS)](#4-background-system-service-linux--vps)
 - [How It Works (Architecture & Data Flow)](#how-it-works-architecture--data-flow)
 - [Project Structure](#project-structure)
-- [Prerequisites](#prerequisites)
-- [Quick Start](#quick-start)
-  - [Option 1: Windows Launcher (`run.bat`)](#option-1-windows-launcher-runbat)
-  - [Option 2: macOS / Linux Launcher (`run.sh`)](#option-2-macos--linux-launcher-runsh)
-  - [Option 3: Docker Deployment](#option-3-docker-deployment)
-  - [Option 4: Manual Python Startup](#option-4-manual-python-startup)
 - [User Guide & Workflows](#user-guide--workflows)
-  - [1. Single Video Mode](#1-single-video-mode)
-  - [2. Batch & Playlist Mode](#2-batch--playlist-mode)
-  - [3. Format & Quality Customization](#3-format--quality-customization)
-  - [4. Persistent Job History](#4-persistent-job-history)
-  - [5. Audacity & System Integration](#5-audacity--system-integration)
+  - [Single Video Mode](#single-video-mode)
+  - [Batch & Playlist Mode](#batch--playlist-mode)
+  - [Format & Quality Customization](#format--quality-customization)
+  - [Persistent Job History](#persistent-job-history)
+  - [Audacity & System Integration](#audacity--system-integration)
 - [Configuration Reference (`config.yaml`)](#configuration-reference-configyaml)
 - [Cookies & Age-Restricted Videos](#cookies--age-restricted-videos)
 - [CLI / Standalone Mode](#cli--standalone-mode)
@@ -37,7 +36,7 @@
 
 ## Overview
 
-**The Extractor** is an enterprise-grade local web application and automation suite designed for content creators, researchers, audio engineers, and video editors. Given any YouTube URL, playlist, or list of URLs, it inspects metadata in real time, parses hidden tags, extracts timestamped speech-to-text transcripts, and downloads customized video (MP4) and standalone audio (MP3/WAV/M4A) ready for audio mastering in tools like Audacity.
+**The Extractor** is a local web application and automation suite designed for content creators, researchers, audio engineers, and video editors. Given any YouTube URL, playlist, or list of URLs, it inspects metadata in real time, parses hidden tags, extracts timestamped speech-to-text transcripts, and downloads customized video (MP4) and standalone audio (MP3/WAV/M4A) ready for audio mastering in tools like Audacity.
 
 Unlike basic download scripts, The Extractor features:
 - **True cross-platform compatibility** across Windows, macOS, and Linux.
@@ -45,7 +44,7 @@ Unlike basic download scripts, The Extractor features:
 - **Persistent SQLite history** recording every extraction and local file path.
 - **Dynamic configuration** via YAML files and environment variables.
 - **Docker containerization** with FFmpeg pre-bundled.
-- **Automated test coverage** via `pytest`.
+- **Automated test coverage & linting** via `pytest` and `ruff`.
 
 ---
 
@@ -63,9 +62,77 @@ Unlike basic download scripts, The Extractor features:
 
 ---
 
-## How It Works (Architecture & Data Flow)
+## Quick Start
 
-The system consists of a decoupled client, a FastAPI orchestrator with an asynchronous worker pool, SQLite persistence, and a resilient extraction engine.
+The Extractor is packaged as a standard Python application and self-contained web service. No `.bat` or `.sh` script files are needed.
+
+### 1. Install & Run CLI (`extractor`)
+
+Install in your active environment:
+```bash
+pip install -e .
+```
+
+Now, launch the application from anywhere:
+```bash
+extractor
+```
+
+Custom options:
+```bash
+# Bind to all network interfaces (for LAN/VPS hosting)
+extractor --host 0.0.0.0 --port 8000
+
+# Run headless without opening browser
+extractor --no-browser
+
+# Enable hot reload for development
+extractor --reload
+```
+
+### 2. Run Directly with Python (`python main.py`)
+
+If you prefer running without installing the package:
+```bash
+pip install -r requirements.txt
+python main.py
+```
+
+### 3. Docker / Docker Compose
+
+To deploy containerized with FFmpeg pre-bundled:
+```bash
+docker compose up -d
+```
+Access the dashboard at `http://localhost:8000`. All downloaded files persist in `./downloads`.
+
+### 4. Background System Service (Linux / VPS)
+
+To run The Extractor permanently as a systemd service:
+```ini
+# /etc/systemd/system/extractor.service
+[Unit]
+Description=The Extractor - Self-Hosted Media Studio
+After=network.target
+
+[Service]
+Type=simple
+User=youruser
+WorkingDirectory=/opt/The-Extractor
+ExecStart=/opt/The-Extractor/.venv/bin/extractor --host 0.0.0.0 --port 8000 --no-browser
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+Enable and start:
+```bash
+sudo systemctl enable --now extractor
+```
+
+---
+
+## How It Works (Architecture & Data Flow)
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -103,13 +170,18 @@ The Extractor/
 ├── config.yaml.example    # Configuration template
 ├── database.py            # SQLite history repository and lifecycle tracking
 ├── downloader.py          # Core engine: metadata inspection, transcripts, yt-dlp & FFmpeg
+├── main.py                # Standalone CLI entrypoint with argparse
 ├── server.py              # FastAPI server, background worker queue, and API endpoints
-├── run.bat                # Windows launcher (starts server & opens browser)
-├── run.sh                 # macOS & Linux launcher
+├── setup.py               # Package metadata and entry_points definition
+├── pyproject.toml         # Modern packaging specification
 ├── Dockerfile             # Multi-stage production container with FFmpeg
 ├── docker-compose.yml     # Docker Compose definition with volume mounts
+├── .dockerignore          # Docker build exclusions
+├── LICENSE                # MIT License
+├── CHANGELOG.md           # Release history and updates
 ├── pytest.ini             # Pytest configuration
-├── requirements.txt       # Python dependencies
+├── requirements.txt       # Production runtime dependencies
+├── requirements-dev.txt   # Development dependencies (pytest, ruff)
 │
 ├── tests/                 # Automated test suite
 │   ├── test_api.py        # API endpoint tests
@@ -127,81 +199,9 @@ The Extractor/
 
 ---
 
-## Prerequisites
+## User Guide & Workflows
 
-1. **Python 3.10+** (if running directly without Docker).
-2. **FFmpeg** installed on your system (if running natively):
-   - **Windows**: `winget install Gyan.FFmpeg` or `choco install ffmpeg`
-   - **macOS**: `brew install ffmpeg`
-   - **Linux (Ubuntu/Debian)**: `sudo apt update && sudo apt install -y ffmpeg`
-   *(Note: When running via Docker, FFmpeg is automatically installed inside the container!)*
-3. *(Optional)* **Audacity** installed on your machine for audio editing.
-
----
-
-## Running as a Self-Hosted Web Application (No Scripts Required)
-
-The Extractor is packaged as a standard Python application and self-contained web service. You **do not** need `.bat` or `.sh` files to run it. Choose any of the following standard production methods:
-
-### Option 1: Direct Command Line (`extractor` or `python main.py`)
-Install in your environment once:
-```bash
-pip install -e .
-```
-Now, start the self-hosted web app directly from anywhere:
-```bash
-extractor
-```
-Or simply execute the Python entrypoint:
-```bash
-python main.py
-```
-Options available:
-```text
-usage: extractor [-h] [--host HOST] [--port PORT] [--no-browser] [--reload]
-
-options:
-  --host HOST    Host address to bind (e.g. 0.0.0.0 for LAN/server hosting)
-  --port PORT    Port to bind (default: 8000)
-  --no-browser   Run headless without opening default web browser
-  --reload       Hot reload for development
-```
-
-### Option 2: Production Docker / Docker Compose
-Deploy as a background microservice without touching Python or FFmpeg on the host:
-```bash
-docker compose up -d
-```
-The web dashboard is served at `http://localhost:8000`.
-
-### Option 3: Systemd / Background Service (Linux / VPS)
-To run The Extractor permanently on a Linux server or VPS:
-```ini
-# /etc/systemd/system/extractor.service
-[Unit]
-Description=The Extractor - Self-Hosted Media Studio
-After=network.target
-
-[Service]
-Type=simple
-User=youruser
-WorkingDirectory=/opt/The-Extractor
-ExecStart=/opt/The-Extractor/.venv/bin/extractor --host 0.0.0.0 --port 8000 --no-browser
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-```
-Enable and start:
-```bash
-sudo systemctl enable --now extractor
-```
-
----
-
-## Prerequisites
-
-### 1. Single Video Mode
+### Single Video Mode
 1. Ensure the **Single Video** tab is active.
 2. Paste any YouTube URL (Standard, Short, or `youtu.be` link) and click **Inspect & Extract** (or press Enter).
 3. Review the video preview, view counts, hidden tags, and timestamped speech-to-text transcript.
@@ -209,24 +209,24 @@ sudo systemctl enable --now extractor
 5. Choose what packages to download (**Video**, **Audio**, **Metadata & Transcript**).
 6. Click **Start Extraction & Download** and monitor the live progress bar, speed, and ETA.
 
-### 2. Batch & Playlist Mode
+### Batch & Playlist Mode
 1. Click the **Batch & Playlists** tab.
 2. Paste multiple video URLs (separated by newlines or commas) or a YouTube playlist URL.
 3. Click **Queue Batch Download**.
 4. The background queue will sequentially process each video without freezing the UI.
 5. You can dismiss finished items or monitor errors if any single item fails.
 
-### 3. Format & Quality Customization
+### Format & Quality Customization
 Choose between:
 - **Video**: `Best Available (HD/4K)`, `1080p Full HD`, `720p HD`, or `480p SD`.
 - **Audio**: `MP3 (320 kbps - Studio)`, `MP3 (192 kbps - Standard)`, `MP3 (128 kbps - Voice)`, `WAV (Lossless PCM)`, or `M4A (AAC)`.
 
-### 4. Persistent Job History
+### Persistent Job History
 - Click the **📜 History** button in the header at any time.
 - View past extractions, statuses (`completed`, `queued`, `error`), channels, and timestamps.
 - Remove individual records or clear all history.
 
-### 5. Audacity & System Integration
+### Audacity & System Integration
 - **Open Downloads Folder**: Opens the local output folder in File Explorer (Windows), Finder (macOS), or your default file manager (Linux).
 - **Edit Audio in Audacity**: Launches Audacity directly with the newly downloaded audio track ready for noise reduction, equalization, and editing.
 
@@ -262,14 +262,6 @@ processing:
   max_concurrent_downloads: 2 # Max parallel queue workers
 ```
 
-### Environment Variables
-All options can also be overridden via environment variables:
-- `EXTRACTOR_CONFIG`: Path to custom config YAML.
-- `EXTRACTOR_DOWNLOAD_DIR`: Path to output folder.
-- `EXTRACTOR_API_KEY`: API key for authentication.
-- `EXTRACTOR_HOST` / `EXTRACTOR_PORT`: Host and port.
-- `EXTRACTOR_DB`: Custom path to SQLite database.
-
 ---
 
 ## Cookies & Age-Restricted Videos
@@ -288,7 +280,7 @@ To download age-restricted or bot-protected YouTube videos:
 
 ## CLI / Standalone Mode
 
-`downloader.py` can be executed directly from your terminal:
+`downloader.py` can also be executed directly from your terminal:
 
 ```bash
 # Single video extraction
@@ -315,47 +307,23 @@ python downloader.py "https://www.youtube.com/playlist?list=PL..."
 | `POST` | `/api/open-folder` | Opens downloads directory in OS file manager. |
 | `POST` | `/api/open-audacity`| Launches Audacity loaded with the latest or specified audio file. |
 
-*Note: If `app.api_key` is set in configuration, pass the header `X-API-Key: <your_key>` with requests.*
-
 ---
 
 ## Testing & Quality Assurance
 
-The Extractor includes a comprehensive automated test suite testing configuration loading, database transactions, URL parsing, sanitization, and API endpoints.
-
-To run the tests:
+Run the automated test suite:
 ```bash
-pytest
-```
-Example test output:
-```text
-============================= test session starts =============================
-collected 11 items
-
-tests/test_api.py ...                                                    [ 27%]
-tests/test_config.py ..                                                  [ 45%]
-tests/test_database.py .                                                 [ 54%]
-tests/test_downloader.py .....                                           [100%]
-
-======================= 11 passed in 0.97s ====================================
+pytest -v
 ```
 
----
-
-## Troubleshooting & FAQs
-
-### 1. "Audacity executable not found"
-- Verify Audacity is installed.
-- The app automatically detects standard installation paths on Windows, macOS, and Linux. If installed in a custom directory, set `paths.audacity_path` in `config.yaml`.
-
-### 2. "FFmpeg not found"
-- Install FFmpeg on your machine or run the application via **Docker** (`docker compose up`), where FFmpeg is included.
-
-### 3. "Sign in to confirm you're not a bot"
-- YouTube occasionally blocks automated IP addresses. Export your browser cookies to `cookies.txt` and configure `paths.cookies_file: "cookies.txt"` as detailed above.
+Run code quality linting:
+```bash
+ruff check .
+```
 
 ---
 
 ## License
 
-Released under the [MIT License](LICENSE). Built with Python, FastAPI, yt-dlp, and modern CSS.
+Released under the [MIT License](LICENSE).
+Copyright (c) 2026 Muhammed Sahil Subair.

@@ -1,10 +1,12 @@
 import os
+import platform
 import re
+import shutil
 import sys
 import time
-import shutil
-import platform
-from typing import Callable, Dict, List, Optional, Any
+from collections.abc import Callable
+from typing import Any
+
 import yt_dlp
 
 try:
@@ -14,7 +16,8 @@ except ImportError:
 
 from config import config
 
-def find_ffmpeg_bin() -> Optional[str]:
+
+def find_ffmpeg_bin() -> str | None:
     """Locate ffmpeg executable across Windows, macOS, and Linux."""
     # 1. System PATH
     if shutil.which("ffmpeg"):
@@ -39,7 +42,7 @@ def find_ffmpeg_bin() -> Optional[str]:
 
     return None
 
-def extract_video_id(url: str) -> Optional[str]:
+def extract_video_id(url: str) -> str | None:
     """Extract 11-character YouTube video ID from various URL structures."""
     patterns = [
         r'(?:v=|\/)([0-9A-Za-z_-]{11}).*',
@@ -71,10 +74,10 @@ def sanitize_filename(name: str) -> str:
     cleaned = re.sub(r'[\\/*?:"<>|]', "", name)
     return re.sub(r'\s+', ' ', cleaned).strip()
 
-def get_base_ydl_opts(cookies_path: Optional[str] = None) -> Dict[str, Any]:
+def get_base_ydl_opts(cookies_path: str | None = None) -> dict[str, Any]:
     """Build standard yt-dlp options with optional cookies and FFmpeg detection."""
     ffmpeg_path = find_ffmpeg_bin()
-    opts: Dict[str, Any] = {
+    opts: dict[str, Any] = {
         'quiet': True,
         'no_warnings': True,
         'retries': config.processing.max_retries,
@@ -90,7 +93,7 @@ def get_base_ydl_opts(cookies_path: Optional[str] = None) -> Dict[str, Any]:
 
     return opts
 
-def expand_playlist_urls(playlist_url: str) -> List[Dict[str, str]]:
+def expand_playlist_urls(playlist_url: str) -> list[dict[str, str]]:
     """
     Extract individual video URLs and titles from a playlist URL without downloading.
     Returns list of dicts: [{'url': ..., 'title': ..., 'id': ...}]
@@ -115,7 +118,7 @@ def expand_playlist_urls(playlist_url: str) -> List[Dict[str, str]]:
                 })
     return videos
 
-def fetch_transcript_data(video_id: str, ydl_info: Optional[Dict] = None) -> List[Dict[str, Any]]:
+def fetch_transcript_data(video_id: str, ydl_info: dict | None = None) -> list[dict[str, Any]]:
     """
     Fetch transcript using youtube-transcript-api with fallback to yt-dlp subtitle streams.
     Returns a list of dicts: [{'start': 0.0, 'duration': 2.5, 'timestamp': '00:00', 'text': '...'}]
@@ -155,7 +158,7 @@ def fetch_transcript_data(video_id: str, ydl_info: Optional[Dict] = None) -> Lis
                         })
                 if transcript_items:
                     return transcript_items
-        except Exception as e:
+        except Exception:
             # Non-fatal note
             pass
 
@@ -171,7 +174,7 @@ def fetch_transcript_data(video_id: str, ydl_info: Optional[Dict] = None) -> Lis
 
     return transcript_items
 
-def inspect_video(url: str, cookies_path: Optional[str] = None) -> Dict[str, Any]:
+def inspect_video(url: str, cookies_path: str | None = None) -> dict[str, Any]:
     """
     Inspect YouTube video to extract all metadata, tags, and transcript preview without downloading.
     Includes exponential retry for network resilience.
@@ -227,7 +230,7 @@ def inspect_video(url: str, cookies_path: Optional[str] = None) -> Dict[str, Any
         'has_transcript': len(transcript) > 0,
     }
 
-def generate_metadata_document(info: Dict[str, Any], output_dir: str) -> Dict[str, str]:
+def generate_metadata_document(info: dict[str, Any], output_dir: str) -> dict[str, str]:
     """Generates both [METADATA].md and [METADATA].txt files with full details."""
     os.makedirs(output_dir, exist_ok=True)
     clean_title = sanitize_filename(info.get('title', 'YouTube_Video'))
@@ -332,21 +335,21 @@ def resolve_video_format_string(resolution: str = "best") -> str:
 
 def download_media_bundle(
     url: str,
-    output_dir: Optional[str] = None,
+    output_dir: str | None = None,
     download_video: bool = True,
     download_audio: bool = True,
     download_doc: bool = True,
     video_resolution: str = "best",
     audio_format: str = "mp3",
     audio_bitrate: str = "192",
-    cookies_path: Optional[str] = None,
-    progress_hook: Optional[Callable[[Dict], None]] = None
-) -> Dict[str, Any]:
+    cookies_path: str | None = None,
+    progress_hook: Callable[[dict], None] | None = None
+) -> dict[str, Any]:
     """Downloads requested components: Video, Audio, and/or Metadata Document."""
     target_dir = os.path.abspath(output_dir or config.absolute_download_dir)
     os.makedirs(target_dir, exist_ok=True)
 
-    results: Dict[str, Any] = {
+    results: dict[str, Any] = {
         'video_file': None,
         'audio_file': None,
         'doc_files': None,
@@ -443,7 +446,7 @@ if __name__ == "__main__":
 
     if target_url:
         if is_playlist_url(target_url):
-            print(f"[*] Detected playlist URL. Fetching items...")
+            print("[*] Detected playlist URL. Fetching items...")
             items = expand_playlist_urls(target_url)
             print(f"[*] Found {len(items)} videos. Starting batch extraction...")
             for idx, item in enumerate(items, 1):

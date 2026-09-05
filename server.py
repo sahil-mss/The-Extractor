@@ -1,20 +1,18 @@
 import os
 import platform
 import subprocess
-import threading
 import uuid
-import webbrowser
-from typing import Dict, List, Optional, Any
 from concurrent.futures import ThreadPoolExecutor
+from typing import Any
 
-from fastapi import FastAPI, HTTPException, Header, Depends
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from config import config
 import database
 import downloader
+from config import config
 
 app = FastAPI(title="The Extractor API", version="2.5.0")
 
@@ -28,10 +26,10 @@ app.add_middleware(
 )
 
 # In-memory live task tracking
-TASKS: Dict[str, Dict[str, Any]] = {}
+TASKS: dict[str, dict[str, Any]] = {}
 executor = ThreadPoolExecutor(max_workers=config.processing.max_concurrent_downloads)
 
-def verify_api_key(x_api_key: Optional[str] = Header(None)):
+def verify_api_key(x_api_key: str | None = Header(None)):
     """Simple API Key verification if configured."""
     if config.app.api_key:
         if not x_api_key or x_api_key != config.app.api_key:
@@ -52,7 +50,7 @@ class DownloadRequest(BaseModel):
     audio_bitrate: str = config.defaults.audio_bitrate
 
 class BatchDownloadRequest(BaseModel):
-    urls: List[str]
+    urls: list[str]
     download_video: bool = config.defaults.download_video
     download_audio: bool = config.defaults.download_audio
     download_doc: bool = config.defaults.download_doc
@@ -61,7 +59,7 @@ class BatchDownloadRequest(BaseModel):
     audio_bitrate: str = config.defaults.audio_bitrate
 
 class AudacityRequest(BaseModel):
-    file_path: Optional[str] = None
+    file_path: str | None = None
 
 # Cross-platform folder opener
 def open_system_folder(folder_path: str):
@@ -112,7 +110,7 @@ def api_inspect(req: InspectRequest, authorized: bool = Depends(verify_api_key))
         raise HTTPException(status_code=500, detail=str(e))
 
 def run_download_task(task_id: str, req: DownloadRequest):
-    def progress_callback(info: Dict):
+    def progress_callback(info: dict):
         if task_id in TASKS:
             TASKS[task_id].update(info)
 

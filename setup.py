@@ -1,4 +1,4 @@
-from setuptools import setup, find_packages
+from setuptools import find_packages, setup
 
 setup(
     name="the-extractor",
@@ -15,7 +15,15 @@ setup(
         "youtube-transcript-api>=0.6.0",
         "pyyaml>=6.0",
         "requests>=2.31.0",
+        "aiosqlite>=0.21.0",
+        "httpx>=0.27.0",
     ],
+    extras_require={
+        "dev": [
+            "pytest>=8.0.0",
+            "ruff>=0.4.0",
+        ]
+    },
     entry_points={
         "console_scripts": [
             "the-extractor=main:main",

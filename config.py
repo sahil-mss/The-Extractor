@@ -1,8 +1,8 @@
 import os
-import sys
-import shutil
 import platform
-from typing import List, Optional
+import shutil
+import sys
+
 import yaml
 from pydantic import BaseModel, Field
 
@@ -12,7 +12,7 @@ class AppConfig(BaseModel):
     host: str = "127.0.0.1"
     port: int = 8000
     api_key: str = ""
-    cors_origins: List[str] = Field(default_factory=lambda: ["*"])
+    cors_origins: list[str] = Field(default_factory=lambda: ["*"])
 
 class PathsConfig(BaseModel):
     download_dir: str = "downloads"
@@ -42,7 +42,7 @@ class Config(BaseModel):
     def absolute_download_dir(self) -> str:
         return os.path.abspath(self.paths.download_dir)
 
-    def get_audacity_executable(self) -> Optional[str]:
+    def get_audacity_executable(self) -> str | None:
         """Cross-platform Audacity executable detection."""
         # 1. Configured explicit path
         if self.paths.audacity_path and os.path.exists(self.paths.audacity_path):
@@ -90,13 +90,13 @@ class Config(BaseModel):
 
         return None
 
-def load_config(config_path: Optional[str] = None) -> Config:
+def load_config(config_path: str | None = None) -> Config:
     """Load configuration from YAML file or environment variables with graceful fallback."""
     path = config_path or CONFIG_FILE_PATH
     data = {}
     if os.path.exists(path):
         try:
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 loaded = yaml.safe_load(f)
                 if isinstance(loaded, dict):
                     data = loaded
@@ -105,7 +105,7 @@ def load_config(config_path: Optional[str] = None) -> Config:
     elif os.path.exists("config.yaml.example") and not os.path.exists(path):
         # Fallback to config.yaml.example if config.yaml doesn't exist yet
         try:
-            with open("config.yaml.example", "r", encoding="utf-8") as f:
+            with open("config.yaml.example", encoding="utf-8") as f:
                 loaded = yaml.safe_load(f)
                 if isinstance(loaded, dict):
                     data = loaded

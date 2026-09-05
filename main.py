@@ -1,12 +1,12 @@
-import os
-import sys
-import time
-import threading
 import argparse
+import threading
+import time
 import webbrowser
+
 import uvicorn
 
 from config import config
+
 
 def open_browser_delayed(url: str, delay: float = 1.2):
     """Open default browser after server initialization."""

@@ -1,6 +1,5 @@
-import os
-import pytest
 from config import Config, load_config
+
 
 def test_default_config_loading():
     cfg = load_config("non_existent_config.yaml")

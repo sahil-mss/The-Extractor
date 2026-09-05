@@ -1,11 +1,11 @@
-import pytest
 from downloader import (
     extract_video_id,
-    is_playlist_url,
     format_timestamp,
+    is_playlist_url,
+    resolve_video_format_string,
     sanitize_filename,
-    resolve_video_format_string
 )
+
 
 def test_extract_video_id():
     assert extract_video_id("https://www.youtube.com/watch?v=dQw4w9WgXcQ") == "dQw4w9WgXcQ"
