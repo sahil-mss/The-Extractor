@@ -16,6 +16,7 @@ class AppConfig(BaseModel):
 
 class PathsConfig(BaseModel):
     download_dir: str = "downloads"
+    data_dir: str = "data"
     cookies_file: str = ""
     audacity_path: str = ""
 
@@ -41,6 +42,14 @@ class Config(BaseModel):
     @property
     def absolute_download_dir(self) -> str:
         return os.path.abspath(self.paths.download_dir)
+
+    @property
+    def absolute_data_dir(self) -> str:
+        return os.path.abspath(self.paths.data_dir)
+
+    @property
+    def database_path(self) -> str:
+        return os.path.join(self.absolute_data_dir, "extractor.db")
 
     def get_audacity_executable(self) -> str | None:
         """Cross-platform Audacity executable detection."""
@@ -115,6 +124,8 @@ def load_config(config_path: str | None = None) -> Config:
     # Environment variable overrides
     if "EXTRACTOR_DOWNLOAD_DIR" in os.environ:
         data.setdefault("paths", {})["download_dir"] = os.environ["EXTRACTOR_DOWNLOAD_DIR"]
+    if "EXTRACTOR_DATA_DIR" in os.environ:
+        data.setdefault("paths", {})["data_dir"] = os.environ["EXTRACTOR_DATA_DIR"]
     if "EXTRACTOR_API_KEY" in os.environ:
         data.setdefault("app", {})["api_key"] = os.environ["EXTRACTOR_API_KEY"]
     if "EXTRACTOR_HOST" in os.environ:
@@ -127,6 +138,7 @@ def load_config(config_path: str | None = None) -> Config:
 
     cfg = Config(**data)
     os.makedirs(cfg.absolute_download_dir, exist_ok=True)
+    os.makedirs(cfg.absolute_data_dir, exist_ok=True)
     return cfg
 
 # Global singleton

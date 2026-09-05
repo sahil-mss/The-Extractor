@@ -10,11 +10,15 @@ venv/
 env/
 ENV/
 *.egg-info/
+dist/
+build/
 
 # Local databases & state
 *.db
 *.sqlite3
 extractor.db
+data/*
+!data/.gitkeep
 
 # Configuration and secrets
 config.yaml

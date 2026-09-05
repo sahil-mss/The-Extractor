@@ -21,12 +21,12 @@ COPY . .
 # Set default environment variables
 ENV EXTRACTOR_CONFIG=config.yaml \
     EXTRACTOR_DOWNLOAD_DIR=/app/downloads \
-    EXTRACTOR_DB=/app/downloads/extractor.db \
+    EXTRACTOR_DATA_DIR=/app/data \
     EXTRACTOR_HOST=0.0.0.0 \
     EXTRACTOR_PORT=8000
 
-# Create volume mount point for persistence
-VOLUME ["/app/downloads"]
+# Create volume mount points for downloads and database persistence
+VOLUME ["/app/downloads", "/app/data"]
 
 EXPOSE 8000
 
