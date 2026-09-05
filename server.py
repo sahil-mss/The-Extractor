@@ -7,7 +7,7 @@ import webbrowser
 from typing import Dict, List, Optional, Any
 from concurrent.futures import ThreadPoolExecutor
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Header, Depends, Query
+from fastapi import FastAPI, HTTPException, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel

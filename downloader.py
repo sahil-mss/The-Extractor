@@ -4,7 +4,6 @@ import sys
 import time
 import shutil
 import platform
-import subprocess
 from typing import Callable, Dict, List, Optional, Any
 import yt_dlp
 

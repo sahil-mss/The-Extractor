@@ -9,6 +9,7 @@ __pycache__/
 venv/
 env/
 ENV/
+*.egg-info/
 
 # Local databases & state
 *.db

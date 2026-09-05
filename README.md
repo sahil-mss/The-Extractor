@@ -139,41 +139,67 @@ The Extractor/
 
 ---
 
-## Quick Start
+## Running as a Self-Hosted Web Application (No Scripts Required)
 
-### Option 1: Windows Launcher (`run.bat`)
-Simply double-click **`run.bat`**. It initializes the virtual environment, launches the server, and opens `http://localhost:8000` in your default browser.
+The Extractor is packaged as a standard Python application and self-contained web service. You **do not** need `.bat` or `.sh` files to run it. Choose any of the following standard production methods:
 
-### Option 2: macOS / Linux Launcher (`run.sh`)
-Make the script executable and run:
+### Option 1: Direct Command Line (`extractor` or `python main.py`)
+Install in your environment once:
 ```bash
-chmod +x run.sh
-./run.sh
+pip install -e .
+```
+Now, start the self-hosted web app directly from anywhere:
+```bash
+extractor
+```
+Or simply execute the Python entrypoint:
+```bash
+python main.py
+```
+Options available:
+```text
+usage: extractor [-h] [--host HOST] [--port PORT] [--no-browser] [--reload]
+
+options:
+  --host HOST    Host address to bind (e.g. 0.0.0.0 for LAN/server hosting)
+  --port PORT    Port to bind (default: 8000)
+  --no-browser   Run headless without opening default web browser
+  --reload       Hot reload for development
 ```
 
-### Option 3: Docker Deployment
-To run fully containerized without installing Python or FFmpeg locally:
+### Option 2: Production Docker / Docker Compose
+Deploy as a background microservice without touching Python or FFmpeg on the host:
 ```bash
 docker compose up -d
 ```
-Access the dashboard at `http://localhost:8000`. All downloaded files persist in `./downloads`.
+The web dashboard is served at `http://localhost:8000`.
 
-### Option 4: Manual Python Startup
+### Option 3: Systemd / Background Service (Linux / VPS)
+To run The Extractor permanently on a Linux server or VPS:
+```ini
+# /etc/systemd/system/extractor.service
+[Unit]
+Description=The Extractor - Self-Hosted Media Studio
+After=network.target
+
+[Service]
+Type=simple
+User=youruser
+WorkingDirectory=/opt/The-Extractor
+ExecStart=/opt/The-Extractor/.venv/bin/extractor --host 0.0.0.0 --port 8000 --no-browser
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+Enable and start:
 ```bash
-# 1. Create and activate virtual environment
-python -m venv .venv
-source .venv/bin/activate   # On Windows: .venv\Scripts\activate
-
-# 2. Install dependencies
-pip install -r requirements.txt
-
-# 3. Start server
-python server.py
+sudo systemctl enable --now extractor
 ```
 
 ---
 
-## User Guide & Workflows
+## Prerequisites
 
 ### 1. Single Video Mode
 1. Ensure the **Single Video** tab is active.
