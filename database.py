@@ -9,7 +9,8 @@ DB_PATH = os.environ.get("EXTRACTOR_DB", config.database_path)
 
 def get_db_connection() -> sqlite3.Connection:
     os.makedirs(os.path.dirname(os.path.abspath(DB_PATH)), exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=10)
+    conn.execute("PRAGMA journal_mode=WAL")
     conn.row_factory = sqlite3.Row
     return conn
 
