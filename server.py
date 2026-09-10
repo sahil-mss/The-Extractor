@@ -20,7 +20,7 @@ app = FastAPI(title="The Extractor API", version="2.5.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=config.app.cors_origins,
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -214,7 +214,7 @@ def api_batch_download(req: BatchDownloadRequest, authorized: bool = Depends(ver
     return {"status": "started", "tasks": task_ids, "total": len(task_ids)}
 
 @app.get("/api/progress/{task_id}")
-def api_progress(task_id: str):
+def api_progress(task_id: str, authorized: bool = Depends(verify_api_key)):
     if task_id not in TASKS:
         raise HTTPException(status_code=404, detail="Task not found")
     return TASKS[task_id]
@@ -239,7 +239,7 @@ def api_clear_history(authorized: bool = Depends(verify_api_key)):
 
 # OS Integration Endpoints
 @app.post("/api/open-folder")
-def api_open_folder():
+def api_open_folder(authorized: bool = Depends(verify_api_key)):
     try:
         downloads_dir = config.absolute_download_dir
         open_system_folder(downloads_dir)
@@ -248,7 +248,7 @@ def api_open_folder():
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/open-audacity")
-def api_open_audacity(req: AudacityRequest):
+def api_open_audacity(req: AudacityRequest, authorized: bool = Depends(verify_api_key)):
     audacity_path = config.get_audacity_executable()
     if not audacity_path:
         raise HTTPException(
@@ -278,8 +278,8 @@ def api_open_audacity(req: AudacityRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to launch Audacity: {e}")
 
-# Mount static web UI
-WEB_DIR = os.path.abspath("web")
+# Mount static web UI (locates package web assets relative to file, not CWD)
+WEB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
 os.makedirs(WEB_DIR, exist_ok=True)
 app.mount("/", StaticFiles(directory=WEB_DIR, html=True), name="web")
 

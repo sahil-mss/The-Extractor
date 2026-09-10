@@ -69,10 +69,11 @@ def format_timestamp(seconds: float) -> str:
         return f"{hrs:02d}:{mins:02d}:{secs:02d}"
     return f"{mins:02d}:{secs:02d}"
 
-def sanitize_filename(name: str) -> str:
-    """Clean filename of characters forbidden in Windows and Unix and normalize spaces."""
+def sanitize_filename(name: str, max_len: int = 120) -> str:
+    """Clean filename of characters forbidden in Windows and Unix, normalize spaces, and cap length."""
     cleaned = re.sub(r'[\\/*?:"<>|]', "", name)
-    return re.sub(r'\s+', ' ', cleaned).strip()
+    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+    return cleaned[:max_len].rstrip()
 
 def get_base_ydl_opts(cookies_path: str | None = None) -> dict[str, Any]:
     """Build standard yt-dlp options with optional cookies and FFmpeg detection."""
@@ -234,7 +235,8 @@ def generate_metadata_document(info: dict[str, Any], output_dir: str) -> dict[st
     """Generates both [METADATA].md and [METADATA].txt files with full details."""
     os.makedirs(output_dir, exist_ok=True)
     clean_title = sanitize_filename(info.get('title', 'YouTube_Video'))
-    base_name = os.path.join(output_dir, f"{clean_title} [METADATA]")
+    vid_id = info.get('id') or "video"
+    base_name = os.path.join(output_dir, f"{clean_title} [{vid_id}] [METADATA]")
 
     tags = info.get('tags', [])
     tags_formatted_md = " ".join([f"`#{t}`" for t in tags]) if tags else "_No tags found for this video._"
@@ -363,6 +365,7 @@ def download_media_bundle(
     info = inspect_video(url, cookies_path)
     results['info'] = info
     clean_title = sanitize_filename(info['title'])
+    vid_id = info.get('id') or extract_video_id(url) or "video"
 
     # Step 2: Generate Metadata Document
     if download_doc:
@@ -389,7 +392,7 @@ def download_media_bundle(
         video_opts = get_base_ydl_opts(cookies_path)
         video_opts.update({
             'format': video_fmt,
-            'outtmpl': os.path.join(target_dir, f"{clean_title} [VIDEO].%(ext)s"),
+            'outtmpl': os.path.join(target_dir, f"{clean_title} [{vid_id}] [VIDEO].%(ext)s"),
             'merge_output_format': 'mp4',
             'noplaylist': True,
             'progress_hooks': [yt_progress_video],
@@ -397,7 +400,7 @@ def download_media_bundle(
 
         with yt_dlp.YoutubeDL(video_opts) as ydl:
             ydl.download([url])
-            results['video_file'] = os.path.join(target_dir, f"{clean_title} [VIDEO].mp4")
+            results['video_file'] = os.path.join(target_dir, f"{clean_title} [{vid_id}] [VIDEO].mp4")
 
     # Step 4: Download Audio
     if download_audio:
@@ -419,7 +422,7 @@ def download_media_bundle(
         audio_opts = get_base_ydl_opts(cookies_path)
         audio_opts.update({
             'format': 'bestaudio/best',
-            'outtmpl': os.path.join(target_dir, f"{clean_title} [AUDIO].%(ext)s"),
+            'outtmpl': os.path.join(target_dir, f"{clean_title} [{vid_id}] [AUDIO].%(ext)s"),
             'noplaylist': True,
             'progress_hooks': [yt_progress_audio],
             'postprocessors': [{
@@ -431,7 +434,7 @@ def download_media_bundle(
 
         with yt_dlp.YoutubeDL(audio_opts) as ydl:
             ydl.download([url])
-            results['audio_file'] = os.path.join(target_dir, f"{clean_title} [AUDIO].{codec}")
+            results['audio_file'] = os.path.join(target_dir, f"{clean_title} [{vid_id}] [AUDIO].{codec}")
 
     if progress_hook:
         progress_hook({'phase': 'finished', 'message': 'All operations completed successfully!'})

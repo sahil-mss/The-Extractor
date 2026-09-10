@@ -5,11 +5,29 @@
 const API_BASE = "";
 
 // State
+let apiKey = sessionStorage.getItem("extractor_api_key") || "";
 let currentVideoData = null;
 let activeTaskId = null;
 let pollTimer = null;
 let activeTasksMap = new Map();
 let batchPollTimer = null;
+
+function authHeaders() {
+  const headers = {};
+  if (apiKey) {
+    headers["X-API-Key"] = apiKey;
+  }
+  return headers;
+}
+
+function setApiKey(key) {
+  apiKey = key ? key.trim() : "";
+  if (apiKey) {
+    sessionStorage.setItem("extractor_api_key", apiKey);
+  } else {
+    sessionStorage.removeItem("extractor_api_key");
+  }
+}
 
 // Tab Elements
 const tabSingle = document.getElementById("tabSingle");
@@ -170,13 +188,13 @@ function getBatchUrls() {
   return raw
     .split(/[\n,]+/)
     .map((u) => u.trim())
-    .filter((u) => u.length > 5);
+    .filter((u) => /^https?:\/\//i.test(u));
 }
 
 startBatchBtn.addEventListener("click", async () => {
   const urls = getBatchUrls();
   if (!urls.length) {
-    showToast("Please enter at least one URL");
+    showToast("Please enter at least one valid URL (http:// or https://)");
     return;
   }
 
@@ -196,7 +214,7 @@ startBatchBtn.addEventListener("click", async () => {
     startBatchBtn.textContent = "Queueing...";
     const res = await fetch(`${API_BASE}/api/batch-download`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify(payload),
     });
     const data = await res.json();
@@ -231,12 +249,17 @@ function renderQueue() {
   activeTasksMap.forEach((task) => {
     const item = document.createElement("div");
     item.className = "queue-item";
+    const displayStatus =
+      task.status === "queued" ? "queued (waiting for slot)" : task.status;
+    const badgeClass =
+      task.status === "queued" ? "status-waiting" : `status-${task.status}`;
+
     item.innerHTML = `
       <div class="queue-info">
         <span class="queue-url">${escapeHtml(task.url)}</span>
         <span class="queue-status-text">${escapeHtml(task.message || task.percent || "")}</span>
       </div>
-      <span class="queue-status-badge status-${task.status}">${task.status}</span>
+      <span class="queue-status-badge ${badgeClass}">${displayStatus}</span>
     `;
     queueList.appendChild(item);
   });
@@ -250,7 +273,9 @@ function startBatchPolling() {
       if (task.status === "completed" || task.status === "error") continue;
       allFinished = false;
       try {
-        const res = await fetch(`${API_BASE}/api/progress/${taskId}`);
+        const res = await fetch(`${API_BASE}/api/progress/${taskId}`, {
+          headers: { ...authHeaders() },
+        });
         if (res.ok) {
           const update = await res.json();
           activeTasksMap.set(taskId, { ...task, ...update });
@@ -293,7 +318,7 @@ async function inspectVideo() {
   try {
     const res = await fetch(`${API_BASE}/api/inspect`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ url }),
     });
 
@@ -382,7 +407,7 @@ downloadBtn.addEventListener("click", async () => {
     downloadBtn.disabled = true;
     const res = await fetch(`${API_BASE}/api/download`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify(payload),
     });
     const data = await res.json();
@@ -403,7 +428,9 @@ function startProgressPolling(taskId) {
 
   pollTimer = setInterval(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/progress/${taskId}`);
+      const res = await fetch(`${API_BASE}/api/progress/${taskId}`, {
+        headers: { ...authHeaders() },
+      });
       if (!res.ok) return;
 
       const info = await res.json();
@@ -440,7 +467,9 @@ closeHistoryBtn.addEventListener("click", () => historyModal.classList.add("hidd
 
 async function loadHistory() {
   try {
-    const res = await fetch(`${API_BASE}/api/history`);
+    const res = await fetch(`${API_BASE}/api/history`, {
+      headers: { ...authHeaders() },
+    });
     if (!res.ok) return;
     const data = await res.json();
     const records = data.history || [];
@@ -485,7 +514,10 @@ async function loadHistory() {
 
 window.deleteHistoryItem = async function (id) {
   try {
-    await fetch(`${API_BASE}/api/history/${id}`, { method: "DELETE" });
+    await fetch(`${API_BASE}/api/history/${id}`, {
+      method: "DELETE",
+      headers: { ...authHeaders() },
+    });
     loadHistory();
   } catch (e) {
     showToast("Failed to delete record");
@@ -494,7 +526,10 @@ window.deleteHistoryItem = async function (id) {
 
 clearHistoryBtn.addEventListener("click", async () => {
   if (confirm("Are you sure you want to clear all extraction history?")) {
-    await fetch(`${API_BASE}/api/history`, { method: "DELETE" });
+    await fetch(`${API_BASE}/api/history`, {
+      method: "DELETE",
+      headers: { ...authHeaders() },
+    });
     loadHistory();
   }
 });
@@ -502,7 +537,9 @@ clearHistoryBtn.addEventListener("click", async () => {
 // 7. Settings Drawer
 navSettingsBtn.addEventListener("click", async () => {
   try {
-    const res = await fetch(`${API_BASE}/api/config`);
+    const res = await fetch(`${API_BASE}/api/config`, {
+      headers: { ...authHeaders() },
+    });
     const cfg = await res.json();
     settingsContent.innerHTML = `
       <div style="font-size: 0.9rem; line-height: 1.6;">
@@ -510,12 +547,37 @@ navSettingsBtn.addEventListener("click", async () => {
         <p><strong>Audacity Binary:</strong> <code>${escapeHtml(cfg.audacity_path)}</code> (${cfg.audacity_detected ? "✅ Detected" : "⚠️ Not Found"})</p>
         <p><strong>Cookies Configured:</strong> ${cfg.has_cookies ? "✅ Yes (cookies.txt)" : "❌ No"}</p>
         <p><strong>API Auth Enabled:</strong> ${cfg.auth_enabled ? "🔒 Yes" : "🔓 Public / Local"}</p>
+        <div style="margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--border-subtle);">
+          <label style="display: block; font-weight: 600; margin-bottom: 0.4rem;" for="apiKeyInput">
+            🔑 Client API Key (Header: X-API-Key):
+          </label>
+          <div style="display: flex; gap: 0.5rem;">
+            <input 
+              type="password" 
+              id="apiKeyInput" 
+              value="${escapeHtml(apiKey)}" 
+              placeholder="Enter API Key if configured..." 
+              style="flex: 1; background: rgba(0,0,0,0.3); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 0.5rem; color: var(--text-primary); font-family: var(--font-mono); font-size: 0.85rem;"
+            />
+            <button id="saveApiKeyBtn" class="btn btn-primary btn-sm">Save Key</button>
+          </div>
+          <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.35rem;">Saved in your browser session for authenticated API calls.</p>
+        </div>
         <p style="margin-top: 1rem; color: var(--text-secondary);">Edit <code>config.yaml</code> to adjust quality presets, Audacity path, API tokens, and concurrency.</p>
       </div>
     `;
+
+    document.getElementById("saveApiKeyBtn").addEventListener("click", () => {
+      const keyVal = document.getElementById("apiKeyInput").value;
+      setApiKey(keyVal);
+      showToast("API Key saved for this session!");
+      loadHistory();
+    });
+
     settingsModal.classList.remove("hidden");
   } catch (e) {
-    showToast("Failed to fetch settings");
+    showToast("Failed to fetch settings (check API key if auth is required)");
+    settingsModal.classList.remove("hidden");
   }
 });
 closeSettingsBtn.addEventListener("click", () => settingsModal.classList.add("hidden"));
@@ -544,8 +606,12 @@ copyDescBtn.addEventListener("click", () => {
 });
 
 // 9. OS Launchers
-openFolderBtn.addEventListener("click", () => fetch(`${API_BASE}/api/open-folder`, { method: "POST" }));
-openFolderActionBtn.addEventListener("click", () => fetch(`${API_BASE}/api/open-folder`, { method: "POST" }));
+openFolderBtn.addEventListener("click", () =>
+  fetch(`${API_BASE}/api/open-folder`, { method: "POST", headers: { ...authHeaders() } })
+);
+openFolderActionBtn.addEventListener("click", () =>
+  fetch(`${API_BASE}/api/open-folder`, { method: "POST", headers: { ...authHeaders() } })
+);
 
 openAudacityBtn.addEventListener("click", () => triggerAudacity());
 openAudacityActionBtn.addEventListener("click", () => triggerAudacity());
@@ -554,7 +620,7 @@ async function triggerAudacity() {
   try {
     const res = await fetch(`${API_BASE}/api/open-audacity`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({}),
     });
     if (!res.ok) {

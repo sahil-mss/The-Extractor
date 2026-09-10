@@ -24,6 +24,9 @@ def test_format_timestamp():
 
 def test_sanitize_filename():
     assert sanitize_filename('Invalid: / * ? " < > | Name') == "Invalid Name"
+    long_name = "A" * 150
+    assert len(sanitize_filename(long_name)) == 120
+    assert len(sanitize_filename(long_name, max_len=50)) == 50
 
 def test_resolve_video_format_string():
     assert "1080" in resolve_video_format_string("1080p")

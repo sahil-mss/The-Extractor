@@ -342,7 +342,7 @@ body {
   background: rgba(239, 68, 68, 0.2);
   color: var(--accent-danger);
 }
-.status-queued {
+.status-queued, .status-waiting {
   background: rgba(245, 158, 11, 0.2);
   color: var(--accent-amber);
 }

@@ -35,9 +35,11 @@ extractor = "main:main"
 
 [tool.setuptools]
 py-modules = ["server", "downloader", "config", "database", "main"]
+packages = ["web"]
+include-package-data = true
 
 [tool.setuptools.package-data]
-"*" = ["web/*"]
+web = ["*"]
 
 [tool.ruff]
 line-length = 120

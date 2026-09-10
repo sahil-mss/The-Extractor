@@ -41,6 +41,8 @@ def main():
     print(f"  Dashboard: {browser_url}")
     print(f"  REST API:  {browser_url}/docs")
     print(f"  Storage:   {config.absolute_download_dir}")
+    if host in ("0.0.0.0", "::") and not config.app.api_key:
+        print("  ⚠️  WARNING: Running on all interfaces with no API key set!")
     print("=" * 70)
 
     if not args.no_browser:
