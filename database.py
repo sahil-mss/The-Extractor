@@ -105,22 +105,52 @@ def record_task_completed(
             completed_at
         ))
 
-def get_history(limit: int = 50, offset: int = 0) -> list[dict[str, Any]]:
+def get_history(limit: int = 50, offset: int = 0, search: str | None = None) -> list[dict[str, Any]]:
     with get_db_connection() as conn:
-        cursor = conn.execute("""
-            SELECT * FROM extraction_history
-            ORDER BY id DESC
-            LIMIT ? OFFSET ?
-        """, (limit, offset))
+        if search and search.strip():
+            query_term = f"%{search.strip()}%"
+            cursor = conn.execute("""
+                SELECT * FROM extraction_history
+                WHERE title LIKE ? OR url LIKE ? OR channel LIKE ? OR video_id LIKE ?
+                ORDER BY id DESC
+                LIMIT ? OFFSET ?
+            """, (query_term, query_term, query_term, query_term, limit, offset))
+        else:
+            cursor = conn.execute("""
+                SELECT * FROM extraction_history
+                ORDER BY id DESC
+                LIMIT ? OFFSET ?
+            """, (limit, offset))
         return [dict(row) for row in cursor.fetchall()]
 
-def delete_history_item(item_id: int) -> bool:
+def delete_history_item(item_id: int, delete_files: bool = False) -> bool:
     with get_db_connection() as conn:
+        if delete_files:
+            cursor = conn.execute("SELECT video_path, audio_path, doc_md_path, doc_txt_path FROM extraction_history WHERE id = ?", (item_id,))
+            row = cursor.fetchone()
+            if row:
+                for col in ["video_path", "audio_path", "doc_md_path", "doc_txt_path"]:
+                    fpath = row[col]
+                    if fpath and os.path.exists(fpath):
+                        try:
+                            os.remove(fpath)
+                        except OSError:
+                            pass
         cursor = conn.execute("DELETE FROM extraction_history WHERE id = ?", (item_id,))
         return cursor.rowcount > 0
 
-def clear_all_history() -> None:
+def clear_all_history(delete_files: bool = False) -> None:
     with get_db_connection() as conn:
+        if delete_files:
+            cursor = conn.execute("SELECT video_path, audio_path, doc_md_path, doc_txt_path FROM extraction_history")
+            for row in cursor.fetchall():
+                for col in ["video_path", "audio_path", "doc_md_path", "doc_txt_path"]:
+                    fpath = row[col]
+                    if fpath and os.path.exists(fpath):
+                        try:
+                            os.remove(fpath)
+                        except OSError:
+                            pass
         conn.execute("DELETE FROM extraction_history")
 
 # Auto-initialize on import

@@ -23,6 +23,153 @@ def find_ffmpeg_bin() -> str | None:
     if shutil.which("ffmpeg"):
         return None  # yt-dlp will find it directly in system PATH
 
+def check_ytdlp_version() -> dict[str, Any]:
+    """
+    Checks the installed yt-dlp version against PyPI's latest release.
+    Returns status info including whether it is outdated.
+    """
+    current_ver = getattr(yt_dlp, "version", None)
+    installed_ver = getattr(current_ver, "__version__", "unknown") if current_ver else getattr(yt_dlp, "__version__", "unknown")
+
+    result = {
+        "installed": installed_ver,
+        "latest": None,
+        "is_outdated": False,
+        "checked": False,
+    }
+
+    try:
+        import json
+        import urllib.request
+        req = urllib.request.Request(
+            "https://pypi.org/pypi/yt-dlp/json",
+            headers={"User-Agent": "TheExtractor/2.5.0"}
+        )
+        with urllib.request.urlopen(req, timeout=3.0) as resp:
+            if resp.status == 200:
+                data = json.loads(resp.read().decode("utf-8"))
+                latest_ver = data.get("info", {}).get("version")
+                if latest_ver:
+                    result["latest"] = latest_ver
+                    result["checked"] = True
+                    result["is_outdated"] = (latest_ver != installed_ver)
+    except Exception:
+        # Offline or PyPI unreachable: graceful fallback
+        pass
+
+    return result
+
+def get_storage_stats(directory: str | None = None) -> dict[str, Any]:
+    """Calculate disk storage usage for downloads directory and host drive."""
+    target_dir = os.path.abspath(directory or config.absolute_download_dir)
+    os.makedirs(target_dir, exist_ok=True)
+
+    total_bytes = 0
+    file_count = 0
+    for root, _, files in os.walk(target_dir):
+        for f in files:
+            fp = os.path.join(root, f)
+            try:
+                total_bytes += os.path.getsize(fp)
+                file_count += 1
+            except OSError:
+                pass
+
+    try:
+        disk_usage = shutil.disk_usage(target_dir)
+        disk_free_gb = round(disk_usage.free / (1024 ** 3), 2)
+        disk_total_gb = round(disk_usage.total / (1024 ** 3), 2)
+    except Exception:
+        disk_free_gb = 0.0
+        disk_total_gb = 0.0
+
+    return {
+        "directory": target_dir,
+        "file_count": file_count,
+        "total_bytes": total_bytes,
+        "total_mb": round(total_bytes / (1024 ** 2), 2),
+        "total_gb": round(total_bytes / (1024 ** 3), 3),
+        "disk_free_gb": disk_free_gb,
+        "disk_total_gb": disk_total_gb,
+        "max_storage_gb": config.storage.max_storage_gb,
+        "delete_after_days": config.storage.delete_after_days,
+    }
+
+def perform_storage_cleanup(
+    directory: str | None = None,
+    max_storage_gb: float | None = None,
+    delete_after_days: int | None = None
+) -> dict[str, Any]:
+    """
+    Prunes files based on age (delete_after_days) or capacity cap (max_storage_gb).
+    Removes oldest files first. Returns count of removed files and freed bytes.
+    """
+    target_dir = os.path.abspath(directory or config.absolute_download_dir)
+    if not os.path.exists(target_dir):
+        return {"deleted_files": 0, "freed_bytes": 0, "freed_mb": 0.0}
+
+    max_gb = max_storage_gb if max_storage_gb is not None else config.storage.max_storage_gb
+    after_days = delete_after_days if delete_after_days is not None else config.storage.delete_after_days
+
+    # Collect all files with mtime and size
+    file_entries = []
+    total_bytes = 0
+    now = time.time()
+
+    for root, _, files in os.walk(target_dir):
+        for f in files:
+            fp = os.path.join(root, f)
+            try:
+                stat = os.stat(fp)
+                file_entries.append({"path": fp, "size": stat.st_size, "mtime": stat.st_mtime})
+                total_bytes += stat.st_size
+            except OSError:
+                pass
+
+    # Sort oldest first
+    file_entries.sort(key=lambda x: x["mtime"])
+
+    deleted_count = 0
+    freed_bytes = 0
+
+    # 1. Clean by age if configured
+    if after_days and after_days > 0:
+        cutoff = now - (after_days * 86400)
+        remaining_entries = []
+        for entry in file_entries:
+            if entry["mtime"] < cutoff:
+                try:
+                    os.remove(entry["path"])
+                    deleted_count += 1
+                    freed_bytes += entry["size"]
+                    total_bytes -= entry["size"]
+                except OSError:
+                    remaining_entries.append(entry)
+            else:
+                remaining_entries.append(entry)
+        file_entries = remaining_entries
+
+    # 2. Clean by size cap if configured
+    if max_gb and max_gb > 0:
+        max_bytes = max_gb * (1024 ** 3)
+        for entry in file_entries:
+            if total_bytes <= max_bytes:
+                break
+            try:
+                os.remove(entry["path"])
+                deleted_count += 1
+                freed_bytes += entry["size"]
+                total_bytes -= entry["size"]
+            except OSError:
+                pass
+
+    return {
+        "deleted_files": deleted_count,
+        "freed_bytes": freed_bytes,
+        "freed_mb": round(freed_bytes / (1024 ** 2), 2),
+        "remaining_bytes": total_bytes,
+    }
+
     system = platform.system()
     if system == "Windows":
         local_app_data = os.environ.get("LOCALAPPDATA", "")

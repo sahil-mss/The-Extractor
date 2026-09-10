@@ -24,3 +24,7 @@ processing:
   max_retries: 3              # Number of retries on transient network/YouTube errors
   retry_delay_seconds: 2
   max_concurrent_downloads: 2 # Queue worker concurrency
+
+storage:
+  max_storage_gb: 0.0         # Max storage for downloads/ (0.0 for unlimited, e.g. 10.0 for 10GB cap)
+  delete_after_days: 0        # Auto-delete files older than N days (0 for never)

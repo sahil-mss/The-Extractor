@@ -22,6 +22,9 @@
           <span class="badge-text">v2.5 • Cross-Platform & Batch Edition</span>
         </div>
         <div class="header-actions">
+          <span id="diskBadge" class="brand-badge disk-indicator" title="Downloads storage usage and drive capacity">
+            💾 <span id="diskUsageText">Checking disk...</span>
+          </span>
           <button id="navHistoryBtn" class="btn btn-ghost btn-sm">
             📜 History (<span id="historyCountBadge">0</span>)
           </button>
@@ -29,6 +32,10 @@
             ⚙️ Settings
           </button>
         </div>
+      </div>
+      <div id="ytdlpAlertBanner" class="ytdlp-alert hidden">
+        <span>⚠️ <strong>yt-dlp update available!</strong> Installed: <code id="ytdlpCurrentVer"></code> → Latest: <code id="ytdlpLatestVer"></code>. Run: <code>pip install --upgrade yt-dlp</code></span>
+        <button id="dismissYtdlpAlert" class="btn-icon">✖</button>
       </div>
       <h1 class="app-title">The <span class="gradient-text">Extractor</span></h1>
       <p class="app-subtitle">Batch & playlist media downloader, tag inspector, timestamped transcript generator, and cross-platform Audacity audio studio.</p>
@@ -325,6 +332,15 @@
             <button id="clearHistoryBtn" class="btn btn-ghost btn-sm text-danger">Clear All</button>
             <button id="closeHistoryBtn" class="btn-icon">✖</button>
           </div>
+        </div>
+        <div class="history-search-bar">
+          <input 
+            type="text" 
+            id="historySearchInput" 
+            placeholder="🔍 Search history by title, URL, channel, or video ID..." 
+            class="history-search-input"
+          />
+          <button id="clearSearchBtn" class="btn btn-ghost btn-sm hidden">Clear</button>
         </div>
         <div class="modal-body" id="historyListContainer">
           <p class="empty-state">No extraction history yet.</p>

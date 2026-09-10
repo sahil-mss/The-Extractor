@@ -33,11 +33,16 @@ class ProcessingConfig(BaseModel):
     retry_delay_seconds: int = 2
     max_concurrent_downloads: int = 2
 
+class StorageConfig(BaseModel):
+    max_storage_gb: float = 0.0      # 0.0 means unlimited / no size-based deletion
+    delete_after_days: int = 0       # 0 means never delete by age
+
 class Config(BaseModel):
     app: AppConfig = Field(default_factory=AppConfig)
     paths: PathsConfig = Field(default_factory=PathsConfig)
     defaults: DefaultsConfig = Field(default_factory=DefaultsConfig)
     processing: ProcessingConfig = Field(default_factory=ProcessingConfig)
+    storage: StorageConfig = Field(default_factory=StorageConfig)
 
     @property
     def absolute_download_dir(self) -> str:

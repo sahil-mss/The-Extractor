@@ -91,11 +91,21 @@ const historyModal = document.getElementById("historyModal");
 const closeHistoryBtn = document.getElementById("closeHistoryBtn");
 const clearHistoryBtn = document.getElementById("clearHistoryBtn");
 const historyListContainer = document.getElementById("historyListContainer");
+const historySearchInput = document.getElementById("historySearchInput");
+const clearSearchBtn = document.getElementById("clearSearchBtn");
 
 const navSettingsBtn = document.getElementById("navSettingsBtn");
 const settingsModal = document.getElementById("settingsModal");
 const closeSettingsBtn = document.getElementById("closeSettingsBtn");
 const settingsContent = document.getElementById("settingsContent");
+
+// Disk & Update Alerts
+const diskBadge = document.getElementById("diskBadge");
+const diskUsageText = document.getElementById("diskUsageText");
+const ytdlpAlertBanner = document.getElementById("ytdlpAlertBanner");
+const ytdlpCurrentVer = document.getElementById("ytdlpCurrentVer");
+const ytdlpLatestVer = document.getElementById("ytdlpLatestVer");
+const dismissYtdlpAlert = document.getElementById("dismissYtdlpAlert");
 
 // Quick Actions
 const openFolderBtn = document.getElementById("openFolderBtn");
@@ -465,18 +475,46 @@ navHistoryBtn.addEventListener("click", () => {
 });
 closeHistoryBtn.addEventListener("click", () => historyModal.classList.add("hidden"));
 
-async function loadHistory() {
+let historySearchTimer = null;
+historySearchInput.addEventListener("input", () => {
+  const query = historySearchInput.value.trim();
+  if (query) {
+    clearSearchBtn.classList.remove("hidden");
+  } else {
+    clearSearchBtn.classList.add("hidden");
+  }
+  clearTimeout(historySearchTimer);
+  historySearchTimer = setTimeout(() => {
+    loadHistory(query);
+  }, 250);
+});
+
+clearSearchBtn.addEventListener("click", () => {
+  historySearchInput.value = "";
+  clearSearchBtn.classList.add("hidden");
+  loadHistory();
+});
+
+async function loadHistory(searchQuery = null) {
   try {
-    const res = await fetch(`${API_BASE}/api/history`, {
+    const url = new URL(`${window.location.origin}${API_BASE}/api/history`);
+    if (searchQuery) {
+      url.searchParams.set("search", searchQuery);
+    }
+    const res = await fetch(url.toString(), {
       headers: { ...authHeaders() },
     });
     if (!res.ok) return;
     const data = await res.json();
     const records = data.history || [];
-    historyCountBadge.textContent = records.length;
+    if (!searchQuery) {
+      historyCountBadge.textContent = records.length;
+    }
 
     if (!records.length) {
-      historyListContainer.innerHTML = "<p class='empty-state'>No extraction history yet.</p>";
+      historyListContainer.innerHTML = searchQuery
+        ? `<p class='empty-state'>No matching records found for "${escapeHtml(searchQuery)}".</p>`
+        : "<p class='empty-state'>No extraction history yet.</p>";
       return;
     }
 
@@ -500,7 +538,7 @@ async function loadHistory() {
           <td>${r.created_at || "--"}</td>
           <td><span class="queue-status-badge status-${r.status}">${r.status}</span></td>
           <td>
-            <button class="btn btn-ghost btn-sm" onclick="deleteHistoryItem(${r.id})">Delete</button>
+            <button class="btn btn-ghost btn-sm text-danger" title="Delete record and downloaded files" onclick="deleteHistoryItem(${r.id}, true)">Delete</button>
           </td>
         </tr>`;
     });
@@ -512,41 +550,104 @@ async function loadHistory() {
   }
 }
 
-window.deleteHistoryItem = async function (id) {
+window.deleteHistoryItem = async function (id, deleteFiles = false) {
   try {
-    await fetch(`${API_BASE}/api/history/${id}`, {
+    await fetch(`${API_BASE}/api/history/${id}?delete_files=${deleteFiles}`, {
       method: "DELETE",
       headers: { ...authHeaders() },
     });
-    loadHistory();
+    loadHistory(historySearchInput.value.trim() || null);
+    refreshSystemStatus();
   } catch (e) {
     showToast("Failed to delete record");
   }
 };
 
 clearHistoryBtn.addEventListener("click", async () => {
-  if (confirm("Are you sure you want to clear all extraction history?")) {
-    await fetch(`${API_BASE}/api/history`, {
+  const deleteFiles = confirm(
+    "Delete history records AND their downloaded files from disk?\n\n(Click 'OK' to delete files + history, or 'Cancel' to keep files intact)"
+  );
+  try {
+    await fetch(`${API_BASE}/api/history?delete_files=${deleteFiles}`, {
       method: "DELETE",
       headers: { ...authHeaders() },
     });
     loadHistory();
+    refreshSystemStatus();
+    showToast(deleteFiles ? "History and files deleted!" : "History cleared!");
+  } catch (e) {
+    showToast("Failed to clear history");
   }
 });
 
-// 7. Settings Drawer
-navSettingsBtn.addEventListener("click", async () => {
+// 7. System Status, Storage & Settings Drawer
+async function refreshSystemStatus() {
   try {
     const res = await fetch(`${API_BASE}/api/config`, {
       headers: { ...authHeaders() },
     });
+    if (!res.ok) return;
     const cfg = await res.json();
+
+    // 1. Disk usage indicator
+    if (cfg.storage) {
+      const mb = cfg.storage.total_mb;
+      const count = cfg.storage.file_count;
+      const freeGb = cfg.storage.disk_free_gb;
+      diskUsageText.textContent = `${mb} MB (${count} files) • ${freeGb} GB Free`;
+
+      if (cfg.storage.max_storage_gb > 0 && cfg.storage.total_gb >= cfg.storage.max_storage_gb * 0.85) {
+        diskBadge.classList.add("disk-warn");
+      } else {
+        diskBadge.classList.remove("disk-warn");
+      }
+    }
+
+    // 2. yt-dlp staleness check alert
+    if (cfg.ytdlp && cfg.ytdlp.is_outdated) {
+      ytdlpCurrentVer.textContent = cfg.ytdlp.installed;
+      ytdlpLatestVer.textContent = cfg.ytdlp.latest;
+      ytdlpAlertBanner.classList.remove("hidden");
+    } else {
+      ytdlpAlertBanner.classList.add("hidden");
+    }
+
+    return cfg;
+  } catch (e) {
+    diskUsageText.textContent = "Disk: --";
+  }
+}
+
+dismissYtdlpAlert.addEventListener("click", () => {
+  ytdlpAlertBanner.classList.add("hidden");
+});
+
+navSettingsBtn.addEventListener("click", async () => {
+  try {
+    const cfg = await refreshSystemStatus();
+    if (!cfg) throw new Error("Could not load config");
+
+    const storage = cfg.storage || {};
+    const ytdlp = cfg.ytdlp || {};
+
     settingsContent.innerHTML = `
       <div style="font-size: 0.9rem; line-height: 1.6;">
         <p><strong>Downloads Directory:</strong> <code>${escapeHtml(cfg.download_dir)}</code></p>
+        <p><strong>Disk Storage:</strong> <code>${storage.total_mb || 0} MB</code> (${storage.file_count || 0} files) | Drive Free: <code>${storage.disk_free_gb || 0} GB</code></p>
+        <p><strong>Retention Policy:</strong> ${storage.max_storage_gb > 0 ? `Max ${storage.max_storage_gb} GB` : "No size cap"} | ${storage.delete_after_days > 0 ? `Auto-purge > ${storage.delete_after_days} days` : "Never purge by age"}</p>
+        <p><strong>yt-dlp Engine:</strong> <code>v${escapeHtml(ytdlp.installed || "unknown")}</code> ${ytdlp.is_outdated ? `⚠️ (Newer version ${ytdlp.latest} available!)` : "✅ Up to date"}</p>
         <p><strong>Audacity Binary:</strong> <code>${escapeHtml(cfg.audacity_path)}</code> (${cfg.audacity_detected ? "✅ Detected" : "⚠️ Not Found"})</p>
         <p><strong>Cookies Configured:</strong> ${cfg.has_cookies ? "✅ Yes (cookies.txt)" : "❌ No"}</p>
         <p><strong>API Auth Enabled:</strong> ${cfg.auth_enabled ? "🔒 Yes" : "🔓 Public / Local"}</p>
+
+        <div style="margin-top: 1rem; padding: 0.75rem; background: rgba(0,0,0,0.25); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <strong>Storage Maintenance</strong>
+            <p style="font-size: 0.75rem; color: var(--text-muted); margin: 0;">Prune old downloads according to retention policy.</p>
+          </div>
+          <button id="runCleanupBtn" class="btn btn-secondary btn-sm">🧹 Run Cleanup Now</button>
+        </div>
+
         <div style="margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--border-subtle);">
           <label style="display: block; font-weight: 600; margin-bottom: 0.4rem;" for="apiKeyInput">
             🔑 Client API Key (Header: X-API-Key):
@@ -563,7 +664,7 @@ navSettingsBtn.addEventListener("click", async () => {
           </div>
           <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.35rem;">Saved in your browser session for authenticated API calls.</p>
         </div>
-        <p style="margin-top: 1rem; color: var(--text-secondary);">Edit <code>config.yaml</code> to adjust quality presets, Audacity path, API tokens, and concurrency.</p>
+        <p style="margin-top: 1rem; color: var(--text-secondary);">Edit <code>config.yaml</code> to adjust storage limits, quality presets, Audacity path, API tokens, and concurrency.</p>
       </div>
     `;
 
@@ -572,6 +673,22 @@ navSettingsBtn.addEventListener("click", async () => {
       setApiKey(keyVal);
       showToast("API Key saved for this session!");
       loadHistory();
+      refreshSystemStatus();
+    });
+
+    document.getElementById("runCleanupBtn").addEventListener("click", async () => {
+      try {
+        const cRes = await fetch(`${API_BASE}/api/storage/cleanup`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...authHeaders() },
+          body: JSON.stringify({}),
+        });
+        const cData = await cRes.json();
+        showToast(`Cleaned ${cData.deleted_files} file(s) (${cData.freed_mb} MB freed)!`);
+        refreshSystemStatus();
+      } catch (e) {
+        showToast("Storage cleanup failed");
+      }
     });
 
     settingsModal.classList.remove("hidden");
@@ -645,3 +762,4 @@ function escapeHtml(str) {
 
 // Initial Load
 loadHistory();
+refreshSystemStatus();

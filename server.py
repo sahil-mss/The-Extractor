@@ -73,8 +73,11 @@ def open_system_folder(folder_path: str):
 
 @app.get("/api/config")
 def api_get_config(authorized: bool = Depends(verify_api_key)):
-    """Expose system configuration & detected binaries to frontend."""
+    """Expose system configuration, detected binaries, disk stats, and yt-dlp version status."""
     audacity_bin = config.get_audacity_executable()
+    storage_stats = downloader.get_storage_stats()
+    ytdlp_info = downloader.check_ytdlp_version()
+
     return {
         "download_dir": config.absolute_download_dir,
         "audacity_detected": bool(audacity_bin),
@@ -82,7 +85,24 @@ def api_get_config(authorized: bool = Depends(verify_api_key)):
         "has_cookies": bool(config.paths.cookies_file and os.path.exists(config.paths.cookies_file)),
         "auth_enabled": bool(config.app.api_key),
         "defaults": config.defaults.model_dump(),
+        "storage": storage_stats,
+        "ytdlp": ytdlp_info,
     }
+
+class CleanupRequest(BaseModel):
+    max_storage_gb: float | None = None
+    delete_after_days: int | None = None
+
+@app.post("/api/storage/cleanup")
+def api_storage_cleanup(req: CleanupRequest | None = None, authorized: bool = Depends(verify_api_key)):
+    max_gb = req.max_storage_gb if req else None
+    days = req.delete_after_days if req else None
+    result = downloader.perform_storage_cleanup(
+        max_storage_gb=max_gb,
+        delete_after_days=days
+    )
+    result["storage"] = downloader.get_storage_stats()
+    return {"status": "success", **result}
 
 @app.post("/api/inspect")
 def api_inspect(req: InspectRequest, authorized: bool = Depends(verify_api_key)):
@@ -221,20 +241,20 @@ def api_progress(task_id: str, authorized: bool = Depends(verify_api_key)):
 
 # History Endpoints
 @app.get("/api/history")
-def api_get_history(limit: int = 50, offset: int = 0, authorized: bool = Depends(verify_api_key)):
-    records = database.get_history(limit=limit, offset=offset)
+def api_get_history(limit: int = 50, offset: int = 0, search: str | None = None, authorized: bool = Depends(verify_api_key)):
+    records = database.get_history(limit=limit, offset=offset, search=search)
     return {"status": "success", "history": records}
 
 @app.delete("/api/history/{item_id}")
-def api_delete_history(item_id: int, authorized: bool = Depends(verify_api_key)):
-    success = database.delete_history_item(item_id)
+def api_delete_history(item_id: int, delete_files: bool = False, authorized: bool = Depends(verify_api_key)):
+    success = database.delete_history_item(item_id, delete_files=delete_files)
     if not success:
         raise HTTPException(status_code=404, detail="Item not found")
     return {"status": "success", "deleted_id": item_id}
 
 @app.delete("/api/history")
-def api_clear_history(authorized: bool = Depends(verify_api_key)):
-    database.clear_all_history()
+def api_clear_history(delete_files: bool = False, authorized: bool = Depends(verify_api_key)):
+    database.clear_all_history(delete_files=delete_files)
     return {"status": "success", "message": "History cleared"}
 
 # OS Integration Endpoints

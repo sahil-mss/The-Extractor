@@ -1,3 +1,5 @@
+import os
+
 from downloader import (
     extract_video_id,
     format_timestamp,
@@ -115,3 +117,40 @@ def test_filename_collision_dedup(monkeypatch, tmp_path):
     assert res1["doc_files"]["md"] != res2["doc_files"]["md"]
     assert "VID_ONE_1111" in res1["video_file"]
     assert "VID_TWO_2222" in res2["video_file"]
+
+def test_storage_stats_and_cleanup(tmp_path):
+    import time
+
+    from downloader import get_storage_stats, perform_storage_cleanup
+
+    # Create dummy files
+    f1 = tmp_path / "video1.mp4"
+    f1.write_bytes(b"A" * 1000)
+    # Set mtime to 10 days ago
+    old_time = time.time() - (10 * 86400)
+    os.utime(f1, (old_time, old_time))
+
+    f2 = tmp_path / "video2.mp4"
+    f2.write_bytes(b"B" * 2000)
+
+    stats = get_storage_stats(str(tmp_path))
+    assert stats["file_count"] == 2
+    assert stats["total_bytes"] == 3000
+
+    # Cleanup by age: delete older than 5 days
+    cleanup_res = perform_storage_cleanup(str(tmp_path), delete_after_days=5)
+    assert cleanup_res["deleted_files"] == 1
+    assert cleanup_res["freed_bytes"] == 1000
+    assert not f1.exists()
+    assert f2.exists()
+
+    # Cleanup by size cap: cap at very small size
+    cleanup_res2 = perform_storage_cleanup(str(tmp_path), max_storage_gb=0.0000001)
+    assert cleanup_res2["deleted_files"] == 1
+    assert not f2.exists()
+
+def test_check_ytdlp_version():
+    from downloader import check_ytdlp_version
+    info = check_ytdlp_version()
+    assert "installed" in info
+    assert isinstance(info["installed"], str)

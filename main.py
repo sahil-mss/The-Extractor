@@ -41,6 +41,26 @@ def main():
     print(f"  Dashboard: {browser_url}")
     print(f"  REST API:  {browser_url}/docs")
     print(f"  Storage:   {config.absolute_download_dir}")
+
+    # Check disk usage and run retention policy if configured
+    try:
+        from downloader import check_ytdlp_version, get_storage_stats, perform_storage_cleanup
+        cleanup_res = perform_storage_cleanup()
+        if cleanup_res.get("deleted_files", 0) > 0:
+            print(f"  🧹 Retention: Cleaned {cleanup_res['deleted_files']} old file(s) ({cleanup_res['freed_mb']} MB freed)")
+
+        stats = get_storage_stats()
+        print(f"  💾 Disk:    Downloads: {stats['total_mb']} MB ({stats['file_count']} files) | Drive Free: {stats['disk_free_gb']} GB")
+
+        # Check yt-dlp staleness
+        ytdlp_status = check_ytdlp_version()
+        if ytdlp_status.get("is_outdated"):
+            print(f"  ⚠️  NOTICE: yt-dlp is outdated ({ytdlp_status['installed']} -> {ytdlp_status['latest']}). Run: pip install --upgrade yt-dlp")
+        elif ytdlp_status.get("checked"):
+            print(f"  ✅ yt-dlp:  Up to date ({ytdlp_status['installed']})")
+    except Exception:
+        pass
+
     if host in ("0.0.0.0", "::") and not config.app.api_key:
         print("  ⚠️  WARNING: Running on all interfaces with no API key set!")
     print("=" * 70)
