@@ -41,6 +41,9 @@ def find_ffmpeg_bin() -> str | None:
 
     return None
 
+def _parse_ver(v: str) -> tuple[int, ...]:
+    return tuple(int(p) for p in v.split("."))
+
 def check_ytdlp_version() -> dict[str, Any]:
     """
     Checks the installed yt-dlp version against PyPI's latest release.
@@ -70,12 +73,16 @@ def check_ytdlp_version() -> dict[str, Any]:
                 if latest_ver:
                     result["latest"] = latest_ver
                     result["checked"] = True
-                    result["is_outdated"] = (latest_ver != installed_ver)
+                    try:
+                        result["is_outdated"] = _parse_ver(latest_ver) > _parse_ver(installed_ver)
+                    except ValueError:
+                        result["is_outdated"] = (latest_ver != installed_ver)
     except Exception:
         # Offline or PyPI unreachable: graceful fallback
         pass
 
     return result
+
 
 def get_storage_stats(directory: str | None = None) -> dict[str, Any]:
     """Calculate disk storage usage for downloads directory and host drive."""
@@ -345,10 +352,14 @@ def inspect_video(url: str, cookies_path: str | None = None) -> dict[str, Any]:
     Inspect YouTube video to extract all metadata, tags, and transcript preview without downloading.
     Includes exponential retry for network resilience.
     """
+    if not re.match(r"^https?://", url):
+        raise ValueError(f"Not a valid URL: {url}")
+
     video_id = extract_video_id(url)
     opts = get_base_ydl_opts(cookies_path)
     opts['skip_download'] = True
     opts['extract_flat'] = False
+
 
     last_err = None
     for attempt in range(config.processing.max_retries):

@@ -169,3 +169,19 @@ def test_find_ffmpeg_bin_checks_beyond_path(monkeypatch):
     assert find_ffmpeg_bin() == "/usr/bin"
 
 
+def test_version_compare_ignores_zero_padding():
+    from downloader import _parse_ver
+    assert _parse_ver("2026.8.19") == _parse_ver("2026.08.19")
+
+
+def test_inspect_video_invalid_url_raises_value_error():
+    import pytest
+
+    from downloader import inspect_video
+
+    with pytest.raises(ValueError, match="Not a valid URL"):
+        inspect_video("invalid-url-format")
+
+
+
+

@@ -126,8 +126,13 @@ def api_inspect(req: InspectRequest, authorized: bool = Depends(verify_api_key))
     try:
         data = downloader.inspect_video(url)
         return {"status": "success", "is_playlist": False, "data": data}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 def run_download_task(task_id: str, req: DownloadRequest):
     def progress_callback(info: dict):

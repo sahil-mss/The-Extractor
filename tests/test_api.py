@@ -23,6 +23,22 @@ def test_api_inspect_invalid_url():
     response = client.post("/api/inspect", json={"url": ""})
     assert response.status_code == 400
 
+    response_bad_format = client.post("/api/inspect", json={"url": "not-a-url"})
+    assert response_bad_format.status_code == 400
+    assert "Not a valid URL" in response_bad_format.json()["detail"]
+
+
+def test_api_inspect_upstream_failure_returns_502(monkeypatch):
+    import downloader
+
+    def mock_inspect(url, cookies_path=None):
+        raise RuntimeError("Failed to inspect video after 3 attempts: Connection error")
+
+    monkeypatch.setattr(downloader, "inspect_video", mock_inspect)
+    response = client.post("/api/inspect", json={"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"})
+    assert response.status_code == 502
+
+
 def test_api_auth_enforcement(monkeypatch):
     from config import config
     monkeypatch.setattr(config.app, "api_key", "secret-test-key")
