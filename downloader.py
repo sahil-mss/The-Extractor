@@ -23,6 +23,24 @@ def find_ffmpeg_bin() -> str | None:
     if shutil.which("ffmpeg"):
         return None  # yt-dlp will find it directly in system PATH
 
+    system = platform.system()
+    if system == "Windows":
+        local_app_data = os.environ.get("LOCALAPPDATA", "")
+        winget_pkgs = os.path.join(local_app_data, "Microsoft", "WinGet", "Packages")
+        if os.path.isdir(winget_pkgs):
+            for root, dirs, files in os.walk(winget_pkgs):
+                if "ffmpeg.exe" in files:
+                    return root
+        for candidate in [r"C:\ProgramData\chocolatey\bin", os.path.expanduser(r"~\scoop\shims")]:
+            if os.path.exists(os.path.join(candidate, "ffmpeg.exe")):
+                return candidate
+    elif system in ("Darwin", "Linux"):
+        for candidate in ["/usr/local/bin", "/opt/homebrew/bin", "/usr/bin"]:
+            if os.path.exists(os.path.join(candidate, "ffmpeg")):
+                return candidate
+
+    return None
+
 def check_ytdlp_version() -> dict[str, Any]:
     """
     Checks the installed yt-dlp version against PyPI's latest release.

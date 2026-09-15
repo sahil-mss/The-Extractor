@@ -154,3 +154,17 @@ def test_check_ytdlp_version():
     info = check_ytdlp_version()
     assert "installed" in info
     assert isinstance(info["installed"], str)
+
+
+def test_find_ffmpeg_bin_checks_beyond_path(monkeypatch):
+    import platform
+    import shutil
+    from downloader import find_ffmpeg_bin
+
+    monkeypatch.setattr(shutil, "which", lambda x: None)
+    monkeypatch.setattr(platform, "system", lambda: "Linux")
+    expected_path = os.path.join("/usr/bin", "ffmpeg")
+    monkeypatch.setattr(os.path, "exists", lambda p: p == expected_path or p == "/usr/bin/ffmpeg")
+    assert find_ffmpeg_bin() == "/usr/bin"
+
+
