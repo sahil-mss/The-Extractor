@@ -159,6 +159,7 @@ def test_check_ytdlp_version():
 def test_find_ffmpeg_bin_checks_beyond_path(monkeypatch):
     import platform
     import shutil
+
     from downloader import find_ffmpeg_bin
 
     monkeypatch.setattr(shutil, "which", lambda x: None)
