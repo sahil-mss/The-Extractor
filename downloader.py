@@ -6,6 +6,7 @@ import sys
 import time
 from collections.abc import Callable
 from typing import Any
+from urllib.parse import urlparse
 
 import yt_dlp
 
@@ -100,10 +101,13 @@ def get_storage_stats(directory: str | None = None) -> dict[str, Any]:
             except OSError:
                 pass
 
+    disk_used_percent = 0.0
     try:
         disk_usage = shutil.disk_usage(target_dir)
         disk_free_gb = round(disk_usage.free / (1024 ** 3), 2)
         disk_total_gb = round(disk_usage.total / (1024 ** 3), 2)
+        if disk_usage.total > 0:
+            disk_used_percent = round((disk_usage.used / disk_usage.total) * 100.0, 1)
     except Exception:
         disk_free_gb = 0.0
         disk_total_gb = 0.0
@@ -116,9 +120,11 @@ def get_storage_stats(directory: str | None = None) -> dict[str, Any]:
         "total_gb": round(total_bytes / (1024 ** 3), 3),
         "disk_free_gb": disk_free_gb,
         "disk_total_gb": disk_total_gb,
+        "disk_used_percent": disk_used_percent,
         "max_storage_gb": config.storage.max_storage_gb,
         "delete_after_days": config.storage.delete_after_days,
     }
+
 
 def perform_storage_cleanup(
     directory: str | None = None,
@@ -195,24 +201,6 @@ def perform_storage_cleanup(
         "remaining_bytes": total_bytes,
     }
 
-    system = platform.system()
-    if system == "Windows":
-        local_app_data = os.environ.get("LOCALAPPDATA", "")
-        winget_pkgs = os.path.join(local_app_data, "Microsoft", "WinGet", "Packages")
-        if os.path.isdir(winget_pkgs):
-            for root, dirs, files in os.walk(winget_pkgs):
-                if "ffmpeg.exe" in files:
-                    return root
-        # Check standard chocolatey / scoop
-        for candidate in [r"C:\ProgramData\chocolatey\bin", os.path.expanduser(r"~\scoop\shims")]:
-            if os.path.exists(os.path.join(candidate, "ffmpeg.exe")):
-                return candidate
-    elif system in ("Darwin", "Linux"):
-        for candidate in ["/usr/local/bin", "/opt/homebrew/bin", "/usr/bin"]:
-            if os.path.exists(os.path.join(candidate, "ffmpeg")):
-                return candidate
-
-    return None
 
 def extract_video_id(url: str) -> str | None:
     """Extract 11-character YouTube video ID from various URL structures."""
@@ -266,14 +254,18 @@ def get_base_ydl_opts(cookies_path: str | None = None) -> dict[str, Any]:
 
     return opts
 
-def expand_playlist_urls(playlist_url: str) -> list[dict[str, str]]:
+def expand_playlist_urls(playlist_url: str, max_items: int | None = None) -> list[dict[str, str]]:
     """
     Extract individual video URLs and titles from a playlist URL without downloading.
+    Enforces maximum playlist size limit.
     Returns list of dicts: [{'url': ..., 'title': ..., 'id': ...}]
     """
+    limit = max_items if max_items is not None else config.processing.max_playlist_items
     opts = get_base_ydl_opts()
     opts['extract_flat'] = True
     opts['skip_download'] = True
+    if limit and limit > 0:
+        opts['playlistend'] = limit
 
     videos = []
     with yt_dlp.YoutubeDL(opts) as ydl:
@@ -289,7 +281,10 @@ def expand_playlist_urls(playlist_url: str) -> list[dict[str, str]]:
                     'url': f"https://www.youtube.com/watch?v={vid_id}",
                     'title': entry.get('title', f"Video {vid_id}")
                 })
+            if limit and len(videos) >= limit:
+                break
     return videos
+
 
 def fetch_transcript_data(video_id: str, ydl_info: dict | None = None) -> list[dict[str, Any]]:
     """
@@ -352,13 +347,18 @@ def inspect_video(url: str, cookies_path: str | None = None) -> dict[str, Any]:
     Inspect YouTube video to extract all metadata, tags, and transcript preview without downloading.
     Includes exponential retry for network resilience.
     """
-    if not re.match(r"^https?://", url):
+    if len(url) > config.security.max_url_length:
+        raise ValueError(f"URL exceeds maximum allowed length of {config.security.max_url_length} characters")
+
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
         raise ValueError(f"Not a valid URL: {url}")
 
     video_id = extract_video_id(url)
     opts = get_base_ydl_opts(cookies_path)
     opts['skip_download'] = True
     opts['extract_flat'] = False
+
 
 
     last_err = None
@@ -521,11 +521,23 @@ def download_media_bundle(
     audio_format: str = "mp3",
     audio_bitrate: str = "192",
     cookies_path: str | None = None,
-    progress_hook: Callable[[dict], None] | None = None
+    progress_hook: Callable[[dict], None] | None = None,
+    is_cancelled: Callable[[], bool] | None = None,
 ) -> dict[str, Any]:
     """Downloads requested components: Video, Audio, and/or Metadata Document."""
     target_dir = os.path.abspath(output_dir or config.absolute_download_dir)
     os.makedirs(target_dir, exist_ok=True)
+
+    # Disk space protection check
+    storage_stats = get_storage_stats(target_dir)
+    if storage_stats["disk_used_percent"] >= config.storage.critical_percent:
+        raise RuntimeError(
+            f"Download halted: Disk space is critically full ({storage_stats['disk_used_percent']}% used, "
+            f"threshold is {config.storage.critical_percent}%). Please clean up disk space."
+        )
+
+    if is_cancelled and is_cancelled():
+        raise RuntimeError("Task was cancelled by user")
 
     results: dict[str, Any] = {
         'video_file': None,
@@ -539,9 +551,13 @@ def download_media_bundle(
         progress_hook({'phase': 'inspecting', 'message': 'Extracting tags, transcript, and video metadata...'})
 
     info = inspect_video(url, cookies_path)
+    if is_cancelled and is_cancelled():
+        raise RuntimeError("Task was cancelled by user")
+
     results['info'] = info
     clean_title = sanitize_filename(info['title'])
     vid_id = info.get('id') or extract_video_id(url) or "video"
+
 
     # Step 2: Generate Metadata Document
     if download_doc:

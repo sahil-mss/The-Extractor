@@ -105,6 +105,18 @@ def record_task_completed(
             completed_at
         ))
 
+def is_safe_download_path(file_path: str) -> bool:
+    """Ensure the target path is strictly located inside the configured download directory."""
+    if not file_path:
+        return False
+    try:
+        real_target = os.path.realpath(os.path.abspath(file_path))
+        real_allowed = os.path.realpath(os.path.abspath(config.absolute_download_dir))
+        common = os.path.commonpath([real_target, real_allowed])
+        return common == real_allowed and real_target != real_allowed
+    except Exception:
+        return False
+
 def get_history(limit: int = 50, offset: int = 0, search: str | None = None) -> list[dict[str, Any]]:
     with get_db_connection() as conn:
         if search and search.strip():
@@ -123,6 +135,93 @@ def get_history(limit: int = 50, offset: int = 0, search: str | None = None) -> 
             """, (limit, offset))
         return [dict(row) for row in cursor.fetchall()]
 
+def get_history_paginated(
+    page: int = 1,
+    page_size: int = 50,
+    search: str | None = None
+) -> dict[str, Any]:
+    """Retrieve paginated history items with total count."""
+    page = max(1, page)
+    page_size = max(1, min(page_size, 200))
+    offset = (page - 1) * page_size
+
+    with get_db_connection() as conn:
+        if search and search.strip():
+            query_term = f"%{search.strip()}%"
+            count_cursor = conn.execute("""
+                SELECT COUNT(*) as cnt FROM extraction_history
+                WHERE title LIKE ? OR url LIKE ? OR channel LIKE ? OR video_id LIKE ?
+            """, (query_term, query_term, query_term, query_term))
+            total = count_cursor.fetchone()["cnt"]
+
+            items_cursor = conn.execute("""
+                SELECT * FROM extraction_history
+                WHERE title LIKE ? OR url LIKE ? OR channel LIKE ? OR video_id LIKE ?
+                ORDER BY id DESC
+                LIMIT ? OFFSET ?
+            """, (query_term, query_term, query_term, query_term, page_size, offset))
+        else:
+            count_cursor = conn.execute("SELECT COUNT(*) as cnt FROM extraction_history")
+            total = count_cursor.fetchone()["cnt"]
+
+            items_cursor = conn.execute("""
+                SELECT * FROM extraction_history
+                ORDER BY id DESC
+                LIMIT ? OFFSET ?
+            """, (page_size, offset))
+
+        items = [dict(row) for row in items_cursor.fetchall()]
+        return {
+            "items": items,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+        }
+
+def find_download_by_url(url: str) -> dict[str, Any] | None:
+    """Find a completed download record by URL or video_id to detect already-downloaded media."""
+    clean_url = url.strip()
+    with get_db_connection() as conn:
+        cursor = conn.execute("""
+            SELECT * FROM extraction_history
+            WHERE (url = ? OR video_id = ?) AND status = 'completed'
+            ORDER BY id DESC LIMIT 1
+        """, (clean_url, clean_url))
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+def apply_history_retention(
+    max_records: int | None = None,
+    retention_days: int | None = None
+) -> dict[str, int]:
+    """Prune historical database records exceeding max_records or older than retention_days."""
+    max_rec = max_records if max_records is not None else config.history.max_records
+    ret_days = retention_days if retention_days is not None else config.history.retention_days
+
+    deleted_count = 0
+    with get_db_connection() as conn:
+        # 1. Delete records older than retention_days
+        if ret_days and ret_days > 0:
+            cutoff = datetime.now(timezone.utc).timestamp() - (ret_days * 86400)
+            cutoff_str = datetime.fromtimestamp(cutoff, timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+            cur = conn.execute(
+                "DELETE FROM extraction_history WHERE created_at < ?",
+                (cutoff_str,)
+            )
+            deleted_count += cur.rowcount
+
+        # 2. Prune records exceeding max_records
+        if max_rec and max_rec > 0:
+            cur = conn.execute("""
+                DELETE FROM extraction_history
+                WHERE id NOT IN (
+                    SELECT id FROM extraction_history ORDER BY id DESC LIMIT ?
+                )
+            """, (max_rec,))
+            deleted_count += cur.rowcount
+
+    return {"deleted_records": deleted_count}
+
 def delete_history_item(item_id: int, delete_files: bool = False) -> bool:
     with get_db_connection() as conn:
         if delete_files:
@@ -131,7 +230,7 @@ def delete_history_item(item_id: int, delete_files: bool = False) -> bool:
             if row:
                 for col in ["video_path", "audio_path", "doc_md_path", "doc_txt_path"]:
                     fpath = row[col]
-                    if fpath and os.path.exists(fpath):
+                    if fpath and is_safe_download_path(fpath) and os.path.exists(fpath):
                         try:
                             os.remove(fpath)
                         except OSError:
@@ -146,7 +245,7 @@ def clear_all_history(delete_files: bool = False) -> None:
             for row in cursor.fetchall():
                 for col in ["video_path", "audio_path", "doc_md_path", "doc_txt_path"]:
                     fpath = row[col]
-                    if fpath and os.path.exists(fpath):
+                    if fpath and is_safe_download_path(fpath) and os.path.exists(fpath):
                         try:
                             os.remove(fpath)
                         except OSError:
@@ -155,3 +254,4 @@ def clear_all_history(delete_files: bool = False) -> None:
 
 # Auto-initialize on import
 init_db()
+

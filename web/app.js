@@ -53,6 +53,13 @@ const batchCount = document.getElementById("batchCount");
 const batchQueueSection = document.getElementById("batchQueueSection");
 const queueList = document.getElementById("queueList");
 const clearQueueBtn = document.getElementById("clearQueueBtn");
+const cancelAllBtn = document.getElementById("cancelAllBtn");
+const queueSummaryText = document.getElementById("queueSummaryText");
+const cntQueued = document.getElementById("cntQueued");
+const cntRunning = document.getElementById("cntRunning");
+const cntCompleted = document.getElementById("cntCompleted");
+const cntFailed = document.getElementById("cntFailed");
+
 
 // Preview Elements
 const videoThumb = document.getElementById("videoThumb");
@@ -256,55 +263,125 @@ startBatchBtn.addEventListener("click", async () => {
 
 function renderQueue() {
   queueList.innerHTML = "";
+  let qCnt = 0, rCnt = 0, cCnt = 0, fCnt = 0;
+
   activeTasksMap.forEach((task) => {
+    if (task.status === "queued") qCnt++;
+    else if (task.status === "running") rCnt++;
+    else if (task.status === "completed") cCnt++;
+    else if (task.status === "error" || task.status === "cancelled") fCnt++;
+
     const item = document.createElement("div");
     item.className = "queue-item";
     const displayStatus =
-      task.status === "queued" ? "queued (waiting for slot)" : task.status;
+      task.status === "queued" ? "queued" : task.status;
     const badgeClass =
       task.status === "queued" ? "status-waiting" : `status-${task.status}`;
+
+    const canCancel = task.status === "queued" || task.status === "running";
+    const cancelBtnHtml = canCancel
+      ? `<button class="btn btn-ghost btn-sm" style="color: #ef4444; margin-left: 8px;" onclick="cancelTask('${task.task_id}')">Cancel</button>`
+      : "";
 
     item.innerHTML = `
       <div class="queue-info">
         <span class="queue-url">${escapeHtml(task.url)}</span>
         <span class="queue-status-text">${escapeHtml(task.message || task.percent || "")}</span>
       </div>
-      <span class="queue-status-badge ${badgeClass}">${displayStatus}</span>
+      <div style="display: flex; align-items: center;">
+        <span class="queue-status-badge ${badgeClass}">${displayStatus}</span>
+        ${cancelBtnHtml}
+      </div>
     `;
     queueList.appendChild(item);
+  });
+
+  if (cntQueued) cntQueued.textContent = qCnt;
+  if (cntRunning) cntRunning.textContent = rCnt;
+  if (cntCompleted) cntCompleted.textContent = cCnt;
+  if (cntFailed) cntFailed.textContent = fCnt;
+  if (queueSummaryText) queueSummaryText.textContent = `${activeTasksMap.size} items`;
+}
+
+window.cancelTask = async function(taskId) {
+  try {
+    await fetch(`${API_BASE}/api/tasks/${taskId}/cancel`, {
+      method: "POST",
+      headers: { ...authHeaders() },
+    });
+    const t = activeTasksMap.get(taskId);
+    if (t) {
+      t.status = "cancelled";
+      t.message = "Cancelled by user";
+      renderQueue();
+    }
+    showToast("Task cancelled");
+  } catch (e) {
+    showToast("Failed to cancel task");
+  }
+};
+
+if (cancelAllBtn) {
+  cancelAllBtn.addEventListener("click", async () => {
+    try {
+      await fetch(`${API_BASE}/api/tasks/cancel-all`, {
+        method: "POST",
+        headers: { ...authHeaders() },
+      });
+      activeTasksMap.forEach((t) => {
+        if (t.status === "queued" || t.status === "running") {
+          t.status = "cancelled";
+          t.message = "Cancelled by user";
+        }
+      });
+      renderQueue();
+      showToast("All active downloads cancelled");
+    } catch (e) {
+      showToast("Failed to cancel downloads");
+    }
   });
 }
 
 function startBatchPolling() {
   if (batchPollTimer) return;
   batchPollTimer = setInterval(async () => {
-    let allFinished = true;
-    for (const [taskId, task] of activeTasksMap.entries()) {
-      if (task.status === "completed" || task.status === "error") continue;
-      allFinished = false;
-      try {
-        const res = await fetch(`${API_BASE}/api/progress/${taskId}`, {
-          headers: { ...authHeaders() },
+    try {
+      // Use single bulk progress endpoint (EXT-004)
+      const res = await fetch(`${API_BASE}/api/progress`, {
+        headers: { ...authHeaders() },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        (data.tasks || []).forEach((t) => {
+          if (activeTasksMap.has(t.task_id)) {
+            activeTasksMap.set(t.task_id, { ...activeTasksMap.get(t.task_id), ...t });
+          }
         });
-        if (res.ok) {
-          const update = await res.json();
-          activeTasksMap.set(taskId, { ...task, ...update });
-        }
-      } catch (e) {}
-    }
+      }
+    } catch (e) {}
+
     renderQueue();
+
+    let allFinished = true;
+    for (const task of activeTasksMap.values()) {
+      if (task.status === "queued" || task.status === "running") {
+        allFinished = false;
+        break;
+      }
+    }
+
     if (allFinished) {
       clearInterval(batchPollTimer);
       batchPollTimer = null;
       loadHistory();
-      showToast("Batch processing completed!");
+      showToast("Batch processing finished!");
     }
   }, 1000);
 }
 
 clearQueueBtn.addEventListener("click", () => {
   for (const [id, t] of activeTasksMap.entries()) {
-    if (t.status === "completed" || t.status === "error") {
+    if (t.status === "completed" || t.status === "error" || t.status === "cancelled") {
       activeTasksMap.delete(id);
     }
   }
@@ -335,8 +412,6 @@ async function inspectVideo() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || "Inspection failed");
 
-    inspectLoader.classList.add("hidden");
-
     if (data.is_playlist) {
       showToast(`Playlist detected: ${data.playlist_count} videos! Switching to batch tab.`);
       tabBatch.click();
@@ -351,8 +426,12 @@ async function inspectVideo() {
     resultSection.scrollIntoView({ behavior: "smooth" });
   } catch (err) {
     showError(err.message);
+  } finally {
+    // Guaranteed loader cleanup (EXT-018)
+    inspectLoader.classList.add("hidden");
   }
 }
+
 
 function renderVideoWorkspace(v) {
   videoThumb.src = v.thumbnail;

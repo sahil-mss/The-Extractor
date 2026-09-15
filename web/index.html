@@ -134,14 +134,24 @@
       <div class="section-header">
         <div class="header-left">
           <span class="section-badge badge-blue">Queue</span>
-          <h3 class="section-title">Active Batch Processing</h3>
+          <h3 class="section-title">Batch Processing (<span id="queueSummaryText">0 items</span>)</h3>
         </div>
-        <button id="clearQueueBtn" class="btn btn-ghost btn-sm">Dismiss Completed</button>
+        <div class="header-actions">
+          <button id="cancelAllBtn" class="btn btn-ghost btn-sm" style="color: var(--accent-danger, #ef4444);">Cancel All</button>
+          <button id="clearQueueBtn" class="btn btn-ghost btn-sm">Clear Completed</button>
+        </div>
+      </div>
+      <div id="queueSummaryBar" class="queue-summary-bar" style="display: flex; gap: 12px; margin-bottom: 12px; font-size: 0.85rem; opacity: 0.9;">
+        <span>Queued: <strong id="cntQueued">0</strong></span>
+        <span>Downloading: <strong id="cntRunning">0</strong></span>
+        <span>Completed: <strong id="cntCompleted">0</strong></span>
+        <span>Failed: <strong id="cntFailed">0</strong></span>
       </div>
       <div id="queueList" class="queue-list">
         <!-- Rendered dynamically -->
       </div>
     </section>
+
 
     <!-- Results Workspace (Single Video) -->
     <main id="resultSection" class="result-layout hidden">

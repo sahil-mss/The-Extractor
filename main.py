@@ -1,11 +1,13 @@
 import argparse
+import sys
 import threading
 import time
 import webbrowser
 
 import uvicorn
 
-from config import config
+import database
+from config import config, validate_startup_security
 
 
 def open_browser_delayed(url: str, delay: float = 1.2):
@@ -42,6 +44,23 @@ def main():
     print(f"  REST API:  {browser_url}/docs")
     print(f"  Storage:   {config.absolute_download_dir}")
 
+    # Enforce startup security
+    try:
+        config.app.host = host
+        config.app.port = port
+        validate_startup_security(config)
+    except RuntimeError as sec_err:
+        print(f"\n❌ ERROR: {sec_err}\n", file=sys.stderr)
+        sys.exit(1)
+
+    # Run database history retention policy
+    try:
+        ret_res = database.apply_history_retention()
+        if ret_res.get("deleted_records", 0) > 0:
+            print(f"  📜 History Retention: Pruned {ret_res['deleted_records']} old record(s)")
+    except Exception:
+        pass
+
     # Check disk usage and run retention policy if configured
     try:
         from downloader import check_ytdlp_version, get_storage_stats, perform_storage_cleanup
@@ -61,9 +80,8 @@ def main():
     except Exception:
         pass
 
-    if host in ("0.0.0.0", "::") and not config.app.api_key:
-        print("  ⚠️  WARNING: Running on all interfaces with no API key set!")
     print("=" * 70)
+
 
     if not args.no_browser:
         t = threading.Thread(target=open_browser_delayed, args=(browser_url,), daemon=True)

@@ -12,7 +12,11 @@ class AppConfig(BaseModel):
     host: str = "127.0.0.1"
     port: int = 8000
     api_key: str = ""
-    cors_origins: list[str] = Field(default_factory=lambda: ["*"])
+    cors_origins: list[str] = Field(default_factory=lambda: ["http://127.0.0.1:8000", "http://localhost:8000"])
+
+class SecurityConfig(BaseModel):
+    require_api_key_for_non_localhost: bool = True
+    max_url_length: int = 2048
 
 class PathsConfig(BaseModel):
     download_dir: str = "downloads"
@@ -32,17 +36,30 @@ class ProcessingConfig(BaseModel):
     max_retries: int = 3
     retry_delay_seconds: int = 2
     max_concurrent_downloads: int = 2
+    max_batch_size: int = 100
+    max_playlist_items: int = 500
+    max_queue_size: int = 500
+    task_retention_minutes: int = 10
 
 class StorageConfig(BaseModel):
     max_storage_gb: float = 0.0      # 0.0 means unlimited / no size-based deletion
     delete_after_days: int = 0       # 0 means never delete by age
+    warning_percent: float = 80.0
+    critical_percent: float = 95.0
+
+class HistoryConfig(BaseModel):
+    max_records: int = 10000
+    retention_days: int = 90
 
 class Config(BaseModel):
     app: AppConfig = Field(default_factory=AppConfig)
+    security: SecurityConfig = Field(default_factory=SecurityConfig)
     paths: PathsConfig = Field(default_factory=PathsConfig)
     defaults: DefaultsConfig = Field(default_factory=DefaultsConfig)
     processing: ProcessingConfig = Field(default_factory=ProcessingConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)
+    history: HistoryConfig = Field(default_factory=HistoryConfig)
+
 
     @property
     def absolute_download_dir(self) -> str:
@@ -146,5 +163,16 @@ def load_config(config_path: str | None = None) -> Config:
     os.makedirs(cfg.absolute_data_dir, exist_ok=True)
     return cfg
 
+def validate_startup_security(cfg: Config) -> None:
+    """Refuse binding to non-localhost (0.0.0.0, ::) if require_api_key_for_non_localhost is True and API key is empty."""
+    is_non_localhost = cfg.app.host in ("0.0.0.0", "::")
+    if is_non_localhost and cfg.security.require_api_key_for_non_localhost and not cfg.app.api_key.strip():
+        raise RuntimeError(
+            f"Security Error: Cannot bind to '{cfg.app.host}' without an API key configured. "
+            "Set 'app.api_key' in config.yaml / EXTRACTOR_API_KEY env var, or bind to '127.0.0.1'."
+        )
+
 # Global singleton
 config = load_config()
+
+
