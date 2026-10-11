@@ -5,13 +5,19 @@ All notable changes to **The Extractor** will be documented in this file.
 ## [2.6.0] - 2026-10-11
 
 ### Security & Hardening
+- **Strict YouTube URL Validation & SSRF Prevention (SEC-01)**: Implemented `is_valid_youtube_url()` shared validator enforcing strict YouTube domain allowlists (`youtube.com`, `youtu.be`, etc.), blocking IP literals (IPv4/IPv6 private ranges and metadata endpoints), localhost/loopback destinations, and non-YouTube domains across all inspection, download, batch, and playlist expansion endpoints.
+- **Production Security Mode & API Key Strength (SEC-02)**: Added `EXTRACTOR_ENV=production` configuration mode that requires an API key for all host bindings and mandates a minimum key strength (16+ characters).
 - **Universal Non-Loopback API Key Enforcement**: Restricted unauthenticated access strictly to loopback interfaces (`127.0.0.1`, `localhost`, `::1`). Any binding to external or LAN interfaces (e.g. `192.168.x.x` or `0.0.0.0`) strictly requires `EXTRACTOR_API_KEY`.
 - **Timing Attack & Non-ASCII Safe Auth**: Normalized `X-API-Key` comparison using UTF-8 encoded bytes in `hmac.compare_digest` to eliminate 500 crashes on non-ASCII credentials.
 - **Security Headers Middleware**: Enforced `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, and `Referrer-Policy: no-referrer` on all HTTP responses.
 - **Docker Hardening & Host Permissions**: Configured container `user: "${UID:-1000}:${GID:-1000}"` in `docker-compose.yml` to prevent `PermissionError` on Linux host bind mounts (`./downloads`, `./data`), created non-root `appuser` (UID 1000), added container healthcheck probing `/healthz`, defaulted port publication to loopback (`127.0.0.1:8000:8000`), and enforced API key validation.
 
 ### Reliability & Resilience
+- **Strict Format Option Allowlists & Input Constraints (BUG-04)**: Constrained `video_resolution` (`best`, `1080p`, `720p`, `480p`), `audio_format` (`mp3`, `wav`, `m4a`), and `audio_bitrate` (`128`, `192`, `320`) via Pydantic model validators; mandated at least one enabled output format (video, audio, or document); bounded history pagination parameters (`limit`, `page_size`, `page`).
+- **Atomic Batch Task Persistence & DB Rollback (BUG-03)**: Added `record_batch_tasks_created` for transactional batch creation in SQLite and `rollback_batch_tasks` to ensure database records and in-memory entries are completely reconciled if any batch insertion fails.
+- **Frontend Terminal States & Cancellation Status Checks (BUG-02, DOC-01)**: Updated `app.js` progress poller to handle `cancelled` and `interrupted` states, halting interval timers, re-enabling controls, and displaying actionable feedback; checked `res.ok` before updating local UI states on cancellation; synchronized version labels across UI header and badge to `v2.6.0`.
 - **Database Persistence Retry & Logging on Success**: Wrapped completion database writes in `run_download_task` with an automated retry and `logger.error("Failed to persist completed task", exc_info=True)` to ensure persistence failures do not leave rows stuck in `queued` without diagnostic visibility.
+
 - **Auto-Update Timeout & Non-Interactive Safety**: Added a 120-second timeout, `subprocess.TimeoutExpired` handling, and `--no-input --disable-pip-version-check` flags to `auto_update_ytdlp_if_enabled` in `main.py` to prevent startup hangs.
 - **Real-Time Task Cancellation & Worker Halting on Timeout**: Ensured watchdog task timeouts add the timed-out task ID directly to `CANCELLED_TASKS`, interrupting the running download worker. Guarded completion and error status writes in `run_download_task` so worker completion cannot flip a timed-out `error` state back to `completed`.
 - **Watchdog Error Visibility**: Elevated task cleanup watchdog exceptions from `debug` to `logger.warning("task cleanup failed", exc_info=True)` to make background worker issues immediately visible.
