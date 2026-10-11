@@ -8,10 +8,12 @@ All notable changes to **The Extractor** will be documented in this file.
 - **Universal Non-Loopback API Key Enforcement**: Restricted unauthenticated access strictly to loopback interfaces (`127.0.0.1`, `localhost`, `::1`). Any binding to external or LAN interfaces (e.g. `192.168.x.x` or `0.0.0.0`) strictly requires `EXTRACTOR_API_KEY`.
 - **Timing Attack & Non-ASCII Safe Auth**: Normalized `X-API-Key` comparison using UTF-8 encoded bytes in `hmac.compare_digest` to eliminate 500 crashes on non-ASCII credentials.
 - **Security Headers Middleware**: Enforced `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, and `Referrer-Policy: no-referrer` on all HTTP responses.
-- **Docker Hardening**: Created and set non-root `appuser` (UID 1000), added container healthcheck probing `/healthz`, defaulted port publication to loopback (`127.0.0.1:8000:8000`), and enforced API key validation in `docker-compose.yml`.
+- **Docker Hardening & Host Permissions**: Configured container `user: "${UID:-1000}:${GID:-1000}"` in `docker-compose.yml` to prevent `PermissionError` on Linux host bind mounts (`./downloads`, `./data`), created non-root `appuser` (UID 1000), added container healthcheck probing `/healthz`, defaulted port publication to loopback (`127.0.0.1:8000:8000`), and enforced API key validation.
 
 ### Reliability & Resilience
-- **Real-Time Task Cancellation**: Introduced `DownloadCancelled` exception hooked into yt-dlp `progress_hooks` and between execution phases. Cancelling active downloads immediately halts the download and removes leftover `*.part` and `*.ytdl` files.
+- **Real-Time Task Cancellation & Worker Halting on Timeout**: Ensured watchdog task timeouts add the timed-out task ID directly to `CANCELLED_TASKS`, interrupting the running download worker. Guarded completion and error status writes in `run_download_task` so worker completion cannot flip a timed-out `error` state back to `completed`.
+- **Watchdog Error Visibility**: Elevated task cleanup watchdog exceptions from `debug` to `logger.warning("task cleanup failed", exc_info=True)` to make background worker issues immediately visible.
+- **Suffixed Version Parsing**: Corrected `_parse_ver` in `downloader.py` to match leading digits (`re.match(r"\d+", p)`), ensuring release tags like `2026.8.19rc1` rank properly without mangling segment numbers.
 - **Queue Slot Leak Prevention**: Wrapped task creation and background execution submission in atomic rollback blocks under `TASKS_LOCK`. Enqueue failures pop tasks immediately to avoid starvation.
 - **Atomic Batch Task Enqueue**: Allocated batch queue slots atomically under lock before starting database and executor operations with automated rollback on failure.
 - **Network & Task Timeout Protection**: Added a 30s socket timeout to all yt-dlp operations and a 60-minute task timeout worker to automatically clear hung tasks.
@@ -21,6 +23,8 @@ All notable changes to **The Extractor** will be documented in this file.
 - **Graceful Lifespan Shutdown**: Integrated FastAPI lifespan shutdown to cleanly terminate background executor workers on exit.
 
 ### Usability & Performance
+- **Container yt-dlp Auto-Upgrade**: Added opt-in `EXTRACTOR_AUTO_UPDATE_YTDLP=1` support to automatically upgrade `yt-dlp` at container launch before starting the server.
+- **Documented Home Directory Resolution Order**: Clarified working directory rules in documentation (`EXTRACTOR_HOME` -> current working directory if `config.yaml` / `config.yaml.example` is present -> `~/.the_extractor`).
 - **Environment-Aware Path Resolution**: Resolved configuration and default directories relative to `EXTRACTOR_HOME` or user directory instead of current working directory, printing resolved paths at startup.
 - **1-Hour PyPI Cache**: Added thread-safe in-memory caching for `check_ytdlp_version` to keep `/api/config` non-blocking.
 - **Lock Contention Reduction**: Moved database I/O outside `TASKS_LOCK` during task cancellation.

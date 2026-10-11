@@ -278,6 +278,14 @@ processing:
   max_concurrent_downloads: 2 # Max parallel queue workers
 ```
 
+### Home Directory & Path Resolution (`EXTRACTOR_HOME`)
+The application determines its root working directory (`EXTRACTOR_HOME`) using the following resolution order:
+1. **Explicit Environment Variable**: `EXTRACTOR_HOME` if set in the environment.
+2. **Current Working Directory**: If `config.yaml` or `config.yaml.example` exists in the current directory (`os.getcwd()`).
+3. **User Home Directory**: Defaults to `~/.the_extractor` when started from other directories without local configuration files.
+
+The active download folder, database, and configuration paths are resolved from `EXTRACTOR_HOME` and displayed at startup.
+
 ---
 
 ## Cookies & Age-Restricted Videos
