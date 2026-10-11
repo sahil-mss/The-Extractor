@@ -112,10 +112,10 @@ def task_cleanup_worker():
                         results={},
                         error_message=f"Task timed out after {config.processing.task_timeout_minutes} minutes",
                     )
-                except Exception as db_err:
-                    logger.debug(f"Failed to record timed out task in DB: {db_err}")
-        except Exception as ex:
-            logger.debug(f"Task cleanup error: {ex}")
+                except Exception:
+                    logger.warning("Failed to record timed out task in DB", exc_info=True)
+        except Exception:
+            logger.warning("task cleanup failed", exc_info=True)
 
 cleanup_thread = threading.Thread(target=task_cleanup_worker, daemon=True)
 cleanup_thread.start()

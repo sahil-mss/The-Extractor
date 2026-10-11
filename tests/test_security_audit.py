@@ -362,6 +362,24 @@ def test_socket_timeout_and_task_timeout(monkeypatch):
         server.CANCELLED_TASKS.discard(task_id)
 
 
+def test_task_cleanup_worker_logs_warning(monkeypatch):
+    import server
+
+    warning_logged = []
+
+    def mock_warning(msg, exc_info=False):
+        warning_logged.append((msg, exc_info))
+
+    monkeypatch.setattr(server.logger, "warning", mock_warning)
+
+    try:
+        raise RuntimeError("Simulated watchdog breakdown")
+    except Exception:
+        server.logger.warning("task cleanup failed", exc_info=True)
+
+    assert any(msg == "task cleanup failed" and exc is True for msg, exc in warning_logged)
+
+
 def test_batch_download_atomic_rollback_on_db_failure(monkeypatch):
     import pytest
 
