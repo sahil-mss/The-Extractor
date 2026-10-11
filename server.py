@@ -420,12 +420,7 @@ def api_batch_download(req: BatchDownloadRequest, authorized: bool = Depends(ver
         )
 
     # Deduplicate input URLs while preserving order
-    seen = set()
-    deduped_urls = []
-    for u in raw_urls:
-        if u not in seen:
-            seen.add(u)
-            deduped_urls.append(u)
+    deduped_urls = list(dict.fromkeys(raw_urls))
 
     all_urls = []
     skipped_urls = []
@@ -443,8 +438,9 @@ def api_batch_download(req: BatchDownloadRequest, authorized: bool = Depends(ver
 
     # Re-deduplicate expanded playlist list and validate length and structure
     final_urls = []
+    seen_final = set()
     for u in all_urls:
-        if u not in final_urls:
+        if u not in seen_final:
             if len(u) > config.security.max_url_length:
                 raise HTTPException(
                     status_code=400,
@@ -459,6 +455,7 @@ def api_batch_download(req: BatchDownloadRequest, authorized: bool = Depends(ver
                     status_code=400,
                     detail=f"Not a valid HTTP/HTTPS URL in batch: {u}"
                 )
+            seen_final.add(u)
             final_urls.append(u)
 
     # Atomically check capacity and allocate all batch TASKS entries under lock

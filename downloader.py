@@ -88,7 +88,7 @@ def find_ffmpeg_bin() -> str | None:
     return None
 
 def _parse_ver(v: str) -> tuple[int, ...]:
-    return tuple(int(p) for p in v.split("."))
+    return tuple(int(re.sub(r"\D", "", p)) for p in v.split(".") if re.sub(r"\D", "", p))
 
 _YTDLP_VERSION_CACHE: dict[str, Any] | None = None
 _YTDLP_VERSION_CACHE_TIME: float = 0.0

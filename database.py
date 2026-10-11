@@ -1,6 +1,6 @@
 import os
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from config import config
@@ -107,7 +107,7 @@ def record_task_completed(
             info.get("uploader"),
             info.get("duration_str"),
             info.get("thumbnail"),
-            info.get("tag_count", len(info.get("tags", []))),
+            info.get("tag_count") if info.get("tag_count") is not None else len(info.get("tags") or []),
             1 if info.get("has_transcript") else 0,
             results.get("video_file"),
             results.get("audio_file"),
@@ -229,8 +229,8 @@ def apply_history_retention(
     with get_db_connection() as conn:
         # 1. Delete records older than retention_days
         if ret_days and ret_days > 0:
-            cutoff = datetime.now(timezone.utc).timestamp() - (ret_days * 86400)
-            cutoff_str = datetime.fromtimestamp(cutoff, timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+            cutoff = datetime.now(timezone.utc) - timedelta(days=ret_days)
+            cutoff_str = cutoff.strftime("%Y-%m-%d %H:%M:%S")
             cur = conn.execute(
                 "DELETE FROM extraction_history WHERE created_at < ?",
                 (cutoff_str,)
@@ -249,6 +249,16 @@ def apply_history_retention(
 
     return {"deleted_records": deleted_count}
 
+def _remove_safe_files(rows: list[sqlite3.Row] | sqlite3.Cursor) -> None:
+    for row in rows:
+        for col in ("video_path", "audio_path", "doc_md_path", "doc_txt_path"):
+            fpath = row[col]
+            if fpath and is_safe_download_path(fpath) and os.path.exists(fpath):
+                try:
+                    os.remove(fpath)
+                except OSError:
+                    pass
+
 def delete_history_item(item_id: int, delete_files: bool = False) -> bool:
     with get_db_connection() as conn:
         if delete_files:
@@ -259,13 +269,7 @@ def delete_history_item(item_id: int, delete_files: bool = False) -> bool:
             )
             row = cursor.fetchone()
             if row:
-                for col in ["video_path", "audio_path", "doc_md_path", "doc_txt_path"]:
-                    fpath = row[col]
-                    if fpath and is_safe_download_path(fpath) and os.path.exists(fpath):
-                        try:
-                            os.remove(fpath)
-                        except OSError:
-                            pass
+                _remove_safe_files([row])
         cursor = conn.execute("DELETE FROM extraction_history WHERE id = ?", (item_id,))
         return cursor.rowcount > 0
 
@@ -276,14 +280,7 @@ def clear_all_history(delete_files: bool = False) -> None:
                 "SELECT video_path, audio_path, doc_md_path, doc_txt_path "
                 "FROM extraction_history"
             )
-            for row in cursor.fetchall():
-                for col in ["video_path", "audio_path", "doc_md_path", "doc_txt_path"]:
-                    fpath = row[col]
-                    if fpath and is_safe_download_path(fpath) and os.path.exists(fpath):
-                        try:
-                            os.remove(fpath)
-                        except OSError:
-                            pass
+            _remove_safe_files(cursor.fetchall())
         conn.execute("DELETE FROM extraction_history")
 
 

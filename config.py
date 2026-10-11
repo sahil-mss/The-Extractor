@@ -1,3 +1,4 @@
+import ipaddress
 import os
 import platform
 import shutil
@@ -190,12 +191,20 @@ def load_config(config_path: str | None = None) -> Config:
     os.makedirs(cfg.absolute_data_dir, exist_ok=True)
     return cfg
 
+
 LOOPBACK = {"127.0.0.1", "localhost", "::1"}
 
 
 def is_non_localhost(host: str) -> bool:
     """Returns True if the host is not a standard loopback address."""
-    return host.strip().lower() not in LOOPBACK
+    h = host.strip().lower()
+    if h in LOOPBACK:
+        return False
+    try:
+        ip = ipaddress.ip_address(h)
+        return not ip.is_loopback
+    except ValueError:
+        return True
 
 
 def validate_startup_security(cfg: Config) -> None:
