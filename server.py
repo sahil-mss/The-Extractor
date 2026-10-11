@@ -1,6 +1,7 @@
 import logging
 import os
 import platform
+import shutil
 import subprocess
 import threading
 import time
@@ -103,12 +104,16 @@ class CleanupRequest(BaseModel):
 # Cross-platform folder opener
 def open_system_folder(folder_path: str):
     system = platform.system()
+    resolved_path = os.path.normpath(folder_path)
     if system == "Windows":
-        subprocess.Popen(["explorer", os.path.normpath(folder_path)])
+        explorer_exe = shutil.which("explorer") or "explorer"
+        subprocess.Popen([explorer_exe, resolved_path])
     elif system == "Darwin":
-        subprocess.Popen(["open", folder_path])
+        open_exe = shutil.which("open") or "open"
+        subprocess.Popen([open_exe, resolved_path])
     else:
-        subprocess.Popen(["xdg-open", folder_path])
+        xdg_exe = shutil.which("xdg-open") or "xdg-open"
+        subprocess.Popen([xdg_exe, resolved_path])
 
 @app.get("/api/config")
 def api_get_config(authorized: bool = Depends(verify_api_key)):
@@ -168,18 +173,18 @@ def api_inspect(req: InspectRequest, authorized: bool = Depends(verify_api_key))
             }
         except Exception as e:
             logger.error(f"Playlist inspection error: {e}", exc_info=True)
-            raise HTTPException(status_code=500, detail="Failed to inspect playlist. Check server logs.")
+            raise HTTPException(status_code=500, detail="Failed to inspect playlist. Check server logs.") from e
 
     try:
         data = downloader.inspect_video(url)
         return {"status": "success", "is_playlist": False, "data": data}
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except RuntimeError as e:
-        raise HTTPException(status_code=502, detail=str(e))
+        raise HTTPException(status_code=502, detail=str(e)) from e
     except Exception as e:
         logger.error(f"Inspect error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal inspection error. Check server logs.")
+        raise HTTPException(status_code=500, detail="Internal inspection error. Check server logs.") from e
 
 @app.get("/api/check-downloaded")
 def api_check_downloaded(url: str, authorized: bool = Depends(verify_api_key)):
@@ -436,7 +441,7 @@ def api_open_folder(authorized: bool = Depends(verify_api_key)):
         return {"status": "success", "folder": downloads_dir}
     except Exception as e:
         logger.error(f"Open folder error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to open folder")
+        raise HTTPException(status_code=500, detail="Failed to open folder") from e
 
 @app.post("/api/open-audacity")
 def api_open_audacity(req: AudacityRequest, authorized: bool = Depends(verify_api_key)):
@@ -472,7 +477,7 @@ def api_open_audacity(req: AudacityRequest, authorized: bool = Depends(verify_ap
         return {"status": "success", "file": target_file}
     except Exception as e:
         logger.error(f"Launch Audacity error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to launch Audacity")
+        raise HTTPException(status_code=500, detail="Failed to launch Audacity") from e
 
 # Mount static web UI (locates package web assets relative to file, not CWD)
 WEB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")

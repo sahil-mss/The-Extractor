@@ -29,7 +29,7 @@ def find_ffmpeg_bin() -> str | None:
         local_app_data = os.environ.get("LOCALAPPDATA", "")
         winget_pkgs = os.path.join(local_app_data, "Microsoft", "WinGet", "Packages")
         if os.path.isdir(winget_pkgs):
-            for root, dirs, files in os.walk(winget_pkgs):
+            for root, _dirs, files in os.walk(winget_pkgs):
                 if "ffmpeg.exe" in files:
                     return root
         for candidate in [r"C:\ProgramData\chocolatey\bin", os.path.expanduser(r"~\scoop\shims")]:
@@ -288,12 +288,12 @@ def expand_playlist_urls(playlist_url: str, max_items: int | None = None) -> lis
 
 def fetch_transcript_data(video_id: str, ydl_info: dict | None = None) -> list[dict[str, Any]]:
     """
-    Fetch transcript using youtube-transcript-api with fallback to yt-dlp subtitle streams.
+    Fetch transcript using youtube-transcript-api.
     Returns a list of dicts: [{'start': 0.0, 'duration': 2.5, 'timestamp': '00:00', 'text': '...'}]
     """
     transcript_items = []
 
-    # 1. Try youtube-transcript-api
+    # Try youtube-transcript-api
     if YouTubeTranscriptApi:
         try:
             api = YouTubeTranscriptApi()
@@ -324,20 +324,8 @@ def fetch_transcript_data(video_id: str, ydl_info: dict | None = None) -> list[d
                             'timestamp': format_timestamp(float(start)),
                             'text': text
                         })
-                if transcript_items:
-                    return transcript_items
         except Exception:
-            # Non-fatal note
-            pass
-
-    # 2. Fallback: Parse automatic captions or subtitles from yt-dlp if available
-    if ydl_info:
-        subs = ydl_info.get('subtitles') or {}
-        auto_subs = ydl_info.get('automatic_captions') or {}
-        all_subs = {**auto_subs, **subs}
-        en_sub = all_subs.get('en') or all_subs.get('en-orig')
-        if en_sub:
-            # Captions exist in yt-dlp stream
+            # Non-fatal: transcript unavailable or network error
             pass
 
     return transcript_items
