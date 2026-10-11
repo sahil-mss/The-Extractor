@@ -5,12 +5,15 @@ services:
     build: .
     container_name: the_extractor
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
       - ./downloads:/app/downloads
       - ./data:/app/data
-      - ./config.yaml:/app/config.yaml:ro
+      # To mount a custom configuration file, copy config.yaml.example to config.yaml first:
+      # - ./config.yaml:/app/config.yaml:ro
     environment:
       - EXTRACTOR_HOST=0.0.0.0
       - EXTRACTOR_PORT=8000
+      - EXTRACTOR_API_KEY=${EXTRACTOR_API_KEY:?Please set EXTRACTOR_API_KEY in your environment or .env file}
     restart: unless-stopped
+

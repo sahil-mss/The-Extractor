@@ -4,6 +4,12 @@ from server import app
 
 client = TestClient(app)
 
+def test_healthz_endpoint():
+    response = client.get("/healthz")
+    assert response.status_code == 200
+    assert response.json()["status"] == "ok"
+
+
 def test_api_config():
     response = client.get("/api/config")
     assert response.status_code == 200

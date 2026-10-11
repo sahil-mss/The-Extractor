@@ -13,7 +13,8 @@ This document catalogues all items that could not be verified in the local test 
 
 ### 1.2 Docker Multi-Node Deployment
 - **Constraint:** The current audit was executed within the primary Windows 11 host environment (`win32`). A multi-container Docker Swarm or Kubernetes deployment was not provisioned during this cycle.
-- **Verification Performed:** Inspected `Dockerfile` and `docker-compose.yml` for correct environment variable passing, non-root user execution, and port bindings. Confirmed that host binding logic enforces `API_KEY` requirements when running inside containers bound to `0.0.0.0`.
+- **Verification Performed:** Hardened `Dockerfile` to create and run as a non-root `appuser` (UID 1000), added container `HEALTHCHECK` probing `/healthz`, and updated `docker-compose.yml` with mandatory `EXTRACTOR_API_KEY` validation, default loopback port publication (`127.0.0.1:8000:8000`), and safe optional configuration mounting.
+
 
 ---
 

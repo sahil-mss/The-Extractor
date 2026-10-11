@@ -142,6 +142,11 @@ def open_system_folder(folder_path: str):
         xdg_exe = shutil.which("xdg-open") or "xdg-open"
         subprocess.Popen([xdg_exe, resolved_path])
 
+@app.get("/healthz")
+def healthz():
+    """Unauthenticated healthcheck endpoint for Docker / orchestration."""
+    return {"status": "ok", "app": "The Extractor"}
+
 @app.get("/api/config")
 def api_get_config(authorized: bool = Depends(verify_api_key)):
     """Expose system configuration, detected binaries, disk stats, and yt-dlp version status."""
