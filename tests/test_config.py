@@ -1,3 +1,5 @@
+import os
+
 from config import Config, load_config
 
 
@@ -8,6 +10,17 @@ def test_default_config_loading():
     assert cfg.defaults.video_resolution == "best"
     assert cfg.defaults.audio_format == "mp3"
     assert cfg.defaults.audio_bitrate == "192"
+
+
+def test_extractor_home_path_resolution(monkeypatch, tmp_path):
+    custom_home = str(tmp_path / "custom_home")
+    monkeypatch.setenv("EXTRACTOR_HOME", custom_home)
+    # Reload config
+    from config import load_config
+    cfg = load_config("non_existent.yaml")
+    assert cfg.absolute_download_dir == os.path.abspath(os.path.join(custom_home, "downloads"))
+    assert cfg.absolute_data_dir == os.path.abspath(os.path.join(custom_home, "data"))
+    assert cfg.database_path == os.path.abspath(os.path.join(custom_home, "data", "extractor.db"))
 
 def test_audacity_resolver():
     cfg = Config()

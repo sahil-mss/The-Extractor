@@ -6,7 +6,27 @@ import sys
 import yaml
 from pydantic import BaseModel, Field
 
-CONFIG_FILE_PATH = os.environ.get("EXTRACTOR_CONFIG", "config.yaml")
+
+def get_extractor_home() -> str:
+    """Determine application home directory: EXTRACTOR_HOME -> ~/.the_extractor -> current working directory."""
+    if "EXTRACTOR_HOME" in os.environ:
+        return os.path.abspath(os.environ["EXTRACTOR_HOME"])
+    if not os.path.exists("config.yaml") and not os.path.exists("config.yaml.example"):
+        return os.path.abspath(os.path.expanduser("~/.the_extractor"))
+    return os.getcwd()
+
+
+def get_default_config_path() -> str:
+    if "EXTRACTOR_CONFIG" in os.environ:
+        return os.environ["EXTRACTOR_CONFIG"]
+    home = get_extractor_home()
+    candidate = os.path.join(home, "config.yaml")
+    if os.path.exists(candidate):
+        return candidate
+    return "config.yaml"
+
+
+CONFIG_FILE_PATH = get_default_config_path()
 
 class AppConfig(BaseModel):
     host: str = "127.0.0.1"
@@ -64,11 +84,17 @@ class Config(BaseModel):
 
     @property
     def absolute_download_dir(self) -> str:
-        return os.path.abspath(self.paths.download_dir)
+        d = self.paths.download_dir
+        if os.path.isabs(d):
+            return os.path.abspath(d)
+        return os.path.abspath(os.path.join(get_extractor_home(), d))
 
     @property
     def absolute_data_dir(self) -> str:
-        return os.path.abspath(self.paths.data_dir)
+        d = self.paths.data_dir
+        if os.path.isabs(d):
+            return os.path.abspath(d)
+        return os.path.abspath(os.path.join(get_extractor_home(), d))
 
     @property
     def database_path(self) -> str:

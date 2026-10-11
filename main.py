@@ -47,7 +47,9 @@ def main():
     print("  🚀 The Extractor — Self-Hosted Media Studio")
     print(f"  Dashboard: {browser_url}")
     print(f"  REST API:  {browser_url}/docs")
-    print(f"  Storage:   {config.absolute_download_dir}")
+    print(f"  Config:    {config.paths.download_dir}")
+    print(f"  Downloads: {config.absolute_download_dir}")
+    print(f"  Database:  {config.database_path}")
 
     # Enforce startup security
     try:
