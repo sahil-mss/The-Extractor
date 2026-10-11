@@ -96,6 +96,7 @@ def task_cleanup_worker():
                             t["status"] = "error"
                             t["message"] = f"Task timed out after {config.processing.task_timeout_minutes} minutes"
                             t["finished_at"] = now
+                            CANCELLED_TASKS.add(tid)
                             timed_out_tasks.append((tid, t.get("url", "")))
 
                 for tid in expired_ids:
@@ -253,20 +254,25 @@ def run_download_task(task_id: str, req: DownloadRequest):
     with TASKS_LOCK:
         if task_id in CANCELLED_TASKS:
             already_cancelled = True
-            if task_id in TASKS:
-                TASKS[task_id]["status"] = "cancelled"
-                TASKS[task_id]["message"] = "Download cancelled"
-                TASKS[task_id]["finished_at"] = time.time()
+            task_entry = TASKS.get(task_id)
+            if task_entry and task_entry.get("status") in ("queued", "running"):
+                task_entry["status"] = "cancelled"
+                task_entry["message"] = "Download cancelled"
+                task_entry["finished_at"] = time.time()
+                should_persist_cancel = True
+            else:
+                should_persist_cancel = False
 
     if already_cancelled:
-        database.record_task_completed(
-            task_id=task_id,
-            url=req.url,
-            info={},
-            results={},
-            error_message="Download cancelled by user",
-            status_override="cancelled",
-        )
+        if should_persist_cancel:
+            database.record_task_completed(
+                task_id=task_id,
+                url=req.url,
+                info={},
+                results={},
+                error_message="Download cancelled by user",
+                status_override="cancelled",
+            )
         return
 
     def progress_callback(info: dict):
@@ -300,7 +306,7 @@ def run_download_task(task_id: str, req: DownloadRequest):
 
         if is_cancelled_check():
             with TASKS_LOCK:
-                if task_id in TASKS:
+                if task_id in TASKS and TASKS[task_id].get("status") == "running":
                     TASKS[task_id]["status"] = "cancelled"
                     TASKS[task_id]["message"] = "Download cancelled by user"
                     TASKS[task_id]["finished_at"] = time.time()
@@ -315,43 +321,52 @@ def run_download_task(task_id: str, req: DownloadRequest):
             return
 
         with TASKS_LOCK:
-            if task_id in TASKS:
-                TASKS[task_id]["status"] = "completed"
-                TASKS[task_id]["results"] = results
-                TASKS[task_id]["message"] = "Completed successfully!"
-                TASKS[task_id]["finished_at"] = time.time()
+            task_entry = TASKS.get(task_id)
+            if task_entry and task_entry.get("status") == "running":
+                task_entry["status"] = "completed"
+                task_entry["results"] = results
+                task_entry["message"] = "Completed successfully!"
+                task_entry["finished_at"] = time.time()
+                persisted = True
+            else:
+                persisted = False
 
-        # Persist to database
-        database.record_task_completed(
-            task_id=task_id,
-            url=req.url,
-            info=results.get("info", {}),
-            results=results,
-        )
+        # Persist to database only if task was still running and completed normally
+        if persisted:
+            database.record_task_completed(
+                task_id=task_id,
+                url=req.url,
+                info=results.get("info", {}),
+                results=results,
+            )
     except Exception as e:
         cancelled = is_cancelled_check() or isinstance(e, downloader.DownloadCancelled)
+        persisted = False
         with TASKS_LOCK:
-            if task_id in TASKS:
+            task_entry = TASKS.get(task_id)
+            if task_entry and task_entry.get("status") == "running":
                 if cancelled:
-                    TASKS[task_id]["status"] = "cancelled"
-                    TASKS[task_id]["message"] = "Task cancelled by user"
+                    task_entry["status"] = "cancelled"
+                    task_entry["message"] = "Task cancelled by user"
                 else:
-                    TASKS[task_id]["status"] = "error"
-                    TASKS[task_id]["message"] = str(e)
-                TASKS[task_id]["finished_at"] = time.time()
+                    task_entry["status"] = "error"
+                    task_entry["message"] = str(e)
+                task_entry["finished_at"] = time.time()
+                persisted = True
 
-        if not cancelled:
+        if not cancelled and persisted:
             logger.error(f"Download task {task_id} failed: {e}", exc_info=True)
 
-        # Record in db with explicit cancelled status if cancelled
-        database.record_task_completed(
-            task_id=task_id,
-            url=req.url,
-            info={},
-            results={},
-            error_message="Task cancelled by user" if cancelled else str(e),
-            status_override="cancelled" if cancelled else None,
-        )
+        # Record in db only if the task was still in running state
+        if persisted:
+            database.record_task_completed(
+                task_id=task_id,
+                url=req.url,
+                info={},
+                results={},
+                error_message="Task cancelled by user" if cancelled else str(e),
+                status_override="cancelled" if cancelled else None,
+            )
 
 def enqueue_download(req: DownloadRequest) -> str:
     with TASKS_LOCK:

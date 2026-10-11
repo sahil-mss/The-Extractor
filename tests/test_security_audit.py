@@ -320,7 +320,7 @@ def test_socket_timeout_and_task_timeout(monkeypatch):
     # 2. Verify task_timeout_minutes config default is 60
     assert server.config.processing.task_timeout_minutes == 60
 
-    # 3. Verify task timeout logic marks hung task as error
+    # 3. Verify task timeout logic marks hung task as error and cancels it
     task_id = "hung-task-123"
     with server.TASKS_LOCK:
         server.TASKS[task_id] = {
@@ -340,11 +340,26 @@ def test_socket_timeout_and_task_timeout(monkeypatch):
                 if started_at and (now - started_at) > timeout_secs:
                     t["status"] = "error"
                     t["message"] = f"Task timed out after {server.config.processing.task_timeout_minutes} minutes"
+                    t["finished_at"] = now
+                    server.CANCELLED_TASKS.add(tid)
+
+    with server.TASKS_LOCK:
+        assert server.TASKS[task_id]["status"] == "error"
+        assert "timed out" in server.TASKS[task_id]["message"]
+        assert task_id in server.CANCELLED_TASKS
+
+    # 4. Regression: simulate worker thread finishing later after timeout; status must stay error
+    req = server.DownloadRequest(url="https://www.youtube.com/watch?v=hungvid")
+    # Mock download_media_bundle returning successfully
+    fake_results = {"info": {"id": "hungvid", "title": "Hung Video"}, "video_file": None}
+    monkeypatch.setattr(downloader, "download_media_bundle", lambda **kwargs: fake_results)
+    server.run_download_task(task_id, req)
 
     with server.TASKS_LOCK:
         assert server.TASKS[task_id]["status"] == "error"
         assert "timed out" in server.TASKS[task_id]["message"]
         server.TASKS.clear()
+        server.CANCELLED_TASKS.discard(task_id)
 
 
 def test_batch_download_atomic_rollback_on_db_failure(monkeypatch):
