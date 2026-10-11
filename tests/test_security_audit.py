@@ -413,5 +413,14 @@ def test_batch_download_playlist_expansion_failure_skipped(monkeypatch):
         server.TASKS.clear()
 
 
+def test_security_headers():
+    res = client.get("/healthz")
+    assert res.status_code == 200
+    assert res.headers.get("X-Content-Type-Options") == "nosniff"
+    assert res.headers.get("X-Frame-Options") == "DENY"
+    assert res.headers.get("Referrer-Policy") == "no-referrer"
+
+
+
 
 
