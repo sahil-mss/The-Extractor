@@ -1,12 +1,21 @@
 import os
 
 from downloader import (
+    _parse_ver,
     extract_video_id,
     format_timestamp,
     is_playlist_url,
     resolve_video_format_string,
     sanitize_filename,
 )
+
+
+def test_parse_ver():
+    assert _parse_ver("2026.8.19") == (2026, 8, 19)
+    assert _parse_ver("2026.8.19rc1") == (2026, 8, 19)
+    assert _parse_ver("2026.8.19rc1") <= _parse_ver("2026.8.19")
+    assert _parse_ver("2.6.0") == (2, 6, 0)
+    assert _parse_ver("v2.6.0") == (6, 0) or _parse_ver("2.6.0b2") == (2, 6, 0)
 
 
 def test_extract_video_id():
