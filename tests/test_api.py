@@ -56,6 +56,11 @@ def test_api_auth_enforcement(monkeypatch):
     assert client.get("/api/config", headers=headers).status_code == 200
     assert client.get("/api/history", headers=headers).status_code == 200
 
+    # Non-ASCII header must return 401 instead of 500
+    non_ascii_headers = [(b"x-api-key", "sécret".encode())]
+    res = client.get("/api/config", headers=non_ascii_headers)
+    assert res.status_code == 401
+
 def test_api_config_storage_and_ytdlp():
     response = client.get("/api/config")
     assert response.status_code == 200

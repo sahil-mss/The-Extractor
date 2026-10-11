@@ -48,7 +48,7 @@ def verify_api_key(request: Request, x_api_key: str | None = Header(None)):
     )
 
     if must_require:
-        if not x_api_key or not hmac.compare_digest(x_api_key, config.app.api_key):
+        if not x_api_key or not hmac.compare_digest(x_api_key.encode("utf-8"), config.app.api_key.encode("utf-8")):
             raise HTTPException(status_code=401, detail="Invalid or missing X-API-Key header")
     return True
 
