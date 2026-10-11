@@ -18,6 +18,12 @@ def test_extract_video_id():
 def test_is_playlist_url():
     assert is_playlist_url("https://www.youtube.com/playlist?list=PL123456789") is True
     assert is_playlist_url("https://www.youtube.com/watch?v=dQw4w9WgXcQ") is False
+    # False positive prevention: 'blacklist=1' without 'list' param
+    assert is_playlist_url("https://www.youtube.com/watch?v=dQw4w9WgXcQ&blacklist=1") is False
+    # youtu.be shortlink with video ID and list param treated as single video
+    assert is_playlist_url("https://youtu.be/dQw4w9WgXcQ?list=PL123456789") is False
+    # Video in playlist with index navigation
+    assert is_playlist_url("https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PL123&index=1") is True
 
 def test_format_timestamp():
     assert format_timestamp(65) == "01:05"

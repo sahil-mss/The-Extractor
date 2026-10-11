@@ -6,7 +6,7 @@ import sys
 import time
 from collections.abc import Callable
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 import yt_dlp
 
@@ -263,7 +263,28 @@ def extract_video_id(url: str) -> str | None:
 
 def is_playlist_url(url: str) -> bool:
     """Determine if a URL references a YouTube playlist."""
-    return "list=" in url and not ("watch?v=" in url and "index=" not in url)
+    try:
+        parsed = urlparse(url)
+        qs = parse_qs(parsed.query)
+
+        # Check for explicit 'list' query parameter
+        if "list" not in qs or not qs["list"]:
+            return False
+
+        # If it's a shortlink like youtu.be/VIDEO_ID?list=..., treat as single video
+        netloc = parsed.netloc.lower()
+        if "youtu.be" in netloc:
+            path_parts = [p for p in parsed.path.split("/") if p]
+            if path_parts:
+                return False
+
+        # If it has a video parameter (v=...) without playlist index navigation, treat as single video
+        if "v" in qs and "index" not in qs:
+            return False
+
+        return True
+    except Exception:
+        return False
 
 def format_timestamp(seconds: float) -> str:
     """Format seconds into HH:MM:SS or MM:SS."""
