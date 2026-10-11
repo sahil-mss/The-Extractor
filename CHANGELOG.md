@@ -2,6 +2,16 @@
 
 All notable changes to **The Extractor** will be documented in this file.
 
+## [2.6.1] - 2026-10-11
+
+### Security & Hardening
+- **URL Validator Parser Bypass Remediation (SEC-01)**: Refactored `downloader.is_valid_youtube_url()` to extract the target hostname strictly via `urllib.parse.urlparse().hostname` (lowercased) rather than parsing `netloc` strings, effectively blocking credential-delimiter bypasses (e.g. `youtube.com:443@127.0.0.1`). Explicitly rejected URLs containing userinfo (`username`/`password`), enforced strict allowlist checks with `host == d or host.endswith("." + d)`, restricted port numbers strictly to `None`, `80`, or `443` with `ValueError` protection, and tightened `downloader.is_playlist_url` from substring checks to exact hostname matching.
+- **yt-dlp Extractor Scoping (SEC-01 Defense-in-Depth)**: Configured `'allowed_extractors': ['youtube.*']` across base yt-dlp extraction options (`get_base_ydl_opts`), permanently disabling the generic extractor from fetching non-YouTube URLs or local loopback/metadata services even if invoked directly.
+
+### Reliability & Resilience
+- **Cancel-Aware Retry Backoff Sleeps (P3)**: Enhanced exponential retry loops in `downloader.inspect_video` to accept an `is_cancelled` callback and replaced blocking `time.sleep()` calls with a non-blocking 0.5-second polling loop that immediately raises `DownloadCancelled` upon receiving a user cancellation signal.
+- **Executor Submission Failure Rollback Verification (P3)**: Added regression test `test_batch_executor_submit_failure_rollback` verifying that partial thread pool submission failures properly cancel already-scheduled futures, set cancellation flags, prevent orphaned ghost tasks in memory, and roll back batch records in the database.
+
 ## [2.6.0] - 2026-10-11
 
 ### Security & Hardening

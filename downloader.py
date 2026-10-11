@@ -206,7 +206,7 @@ def check_ytdlp_version(force_refresh: bool = False) -> dict[str, Any]:
             import urllib.request
             req = urllib.request.Request(
                 "https://pypi.org/pypi/yt-dlp/json",
-                headers={"User-Agent": "TheExtractor/2.6.0"}
+                headers={"User-Agent": "TheExtractor/2.6.1"}
             )
             with urllib.request.urlopen(req, timeout=3.0) as resp:
                 if resp.status == 200:

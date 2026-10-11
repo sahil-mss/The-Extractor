@@ -41,7 +41,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     executor.shutdown(wait=False, cancel_futures=True)
 
 
-app = FastAPI(title="The Extractor API", version="2.6.0", lifespan=lifespan)
+app = FastAPI(title="The Extractor API", version="2.6.1", lifespan=lifespan)
 
 # Setup GZip compression for faster wire transfers
 app.add_middleware(GZipMiddleware, minimum_size=500)
