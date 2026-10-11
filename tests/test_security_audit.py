@@ -167,23 +167,52 @@ def test_download_endpoint_url_validation():
     # Non-HTTP/HTTPS schemes must be rejected
     res = client.post("/api/download", json={"url": "javascript:alert(1)"})
     assert res.status_code == 400
-    assert "Not a valid HTTP/HTTPS URL" in res.json()["detail"]
+    assert "Only HTTP and HTTPS URLs are allowed" in res.json()["detail"]
 
     # File URI scheme must be rejected
     res_file = client.post("/api/download", json={"url": "file:///etc/passwd"})
     assert res_file.status_code == 400
-    assert "Not a valid HTTP/HTTPS URL" in res_file.json()["detail"]
+    assert "Only HTTP and HTTPS URLs are allowed" in res_file.json()["detail"]
+
+    # SEC-01 SSRF tests: Loopback, private IP literals, and metadata services must be rejected
+    ssrf_urls = [
+        "http://127.0.0.1/admin",
+        "http://169.254.169.254/latest/meta-data/",
+        "http://10.0.0.1:8080/internal",
+        "http://192.168.1.1/setup",
+        "http://[::1]/secret",
+        "http://localhost:5000/api",
+        "https://evil.com/video",
+        "https://vimeo.com/123456",
+    ]
+    for bad_url in ssrf_urls:
+        res_bad = client.post("/api/download", json={"url": bad_url})
+        assert res_bad.status_code == 400
+        assert any(
+            msg in res_bad.json()["detail"]
+            for msg in ["IP-literal", "Localhost", "not a recognized YouTube domain", "Only HTTP and HTTPS"]
+        )
 
 
 def test_batch_download_url_validation():
-    # Malformed URL in batch list must be rejected
+    # Malformed URL or non-YouTube URL in batch list must be rejected
     urls = [
         "https://www.youtube.com/watch?v=good111",
         "file:///etc/shadow",
     ]
     res = client.post("/api/batch-download", json={"urls": urls})
     assert res.status_code == 400
-    assert "Not a valid HTTP/HTTPS URL in batch" in res.json()["detail"]
+    assert "Invalid URL in batch" in res.json()["detail"]
+
+    # SSRF URL in batch must be rejected
+    ssrf_batch = [
+        "https://www.youtube.com/watch?v=good111",
+        "http://169.254.169.254/latest/meta-data/",
+    ]
+    res_ssrf = client.post("/api/batch-download", json={"urls": ssrf_batch})
+    assert res_ssrf.status_code == 400
+    assert "Invalid URL in batch" in res_ssrf.json()["detail"]
+
 
 
 def test_batch_download_atomic_queue_limit(monkeypatch):

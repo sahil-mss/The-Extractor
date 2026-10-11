@@ -1,3 +1,4 @@
+import ipaddress
 import os
 import platform
 import re
@@ -18,10 +19,75 @@ except ImportError:
 
 from config import config
 
+ALLOWED_YOUTUBE_DOMAINS = {
+    "youtube.com",
+    "www.youtube.com",
+    "m.youtube.com",
+    "music.youtube.com",
+    "gaming.youtube.com",
+    "youtu.be",
+    "www.youtu.be",
+}
+
+
+def is_valid_youtube_url(url: str) -> tuple[bool, str]:
+    """
+    Validates that a URL is a legitimate YouTube URL and not an internal network
+    target, IP-literal, loopback, or non-YouTube domain (SSRF defense SEC-01).
+    Returns (is_valid, error_message).
+    """
+    if not url or not isinstance(url, str):
+        return False, "URL is required"
+
+    clean_url = url.strip()
+    if len(clean_url) > config.security.max_url_length:
+        return False, f"URL exceeds maximum allowed length of {config.security.max_url_length} characters"
+
+    try:
+        parsed = urlparse(clean_url)
+    except Exception as e:
+        return False, f"Malformed URL: {e}"
+
+    if parsed.scheme.lower() not in ("http", "https"):
+        return False, "Not a valid URL: Only HTTP and HTTPS URLs are allowed"
+
+    netloc = parsed.netloc.lower()
+    if not netloc:
+        return False, "Not a valid URL: missing host"
+
+
+    # Strip port if present
+    host = netloc.split(":")[0]
+
+    # Block IP literals (IPv4 and IPv6) to prevent SSRF against internal/cloud metadata services
+    try:
+        ipaddress.ip_address(host)
+        return False, f"IP-literal destinations are not allowed: {host}"
+    except ValueError:
+        pass
+
+
+    # Reject localhost / internal hostnames
+    if host in {"localhost", "localhost.localdomain", "broadcasthost"}:
+        return False, f"Localhost destinations are not allowed: {host}"
+
+    # Enforce allowed YouTube domains
+    if host not in ALLOWED_YOUTUBE_DOMAINS:
+        return False, f"Host '{host}' is not a recognized YouTube domain"
+
+    # For youtu.be, ensure there is a non-empty path (the video ID)
+    if host in ("youtu.be", "www.youtu.be"):
+        path_parts = [p for p in parsed.path.split("/") if p]
+        if not path_parts:
+            return False, "Invalid youtu.be URL: missing video ID path"
+
+    return True, ""
+
 
 class DownloadCancelled(Exception):
     """Raised when a download task has been cancelled by the user."""
     pass
+
 
 
 class PermanentMediaError(RuntimeError):
@@ -372,12 +438,9 @@ def expand_playlist_urls(playlist_url: str, max_items: int | None = None) -> lis
     Enforces maximum playlist size limit.
     Returns list of dicts: [{'url': ..., 'title': ..., 'id': ...}]
     """
-    if len(playlist_url) > config.security.max_url_length:
-        raise ValueError(f"URL exceeds maximum allowed length of {config.security.max_url_length} characters")
-
-    parsed = urlparse(playlist_url)
-    if parsed.scheme not in ("http", "https") or not parsed.netloc:
-        raise ValueError(f"Not a valid URL: {playlist_url}")
+    valid, err_msg = is_valid_youtube_url(playlist_url)
+    if not valid:
+        raise ValueError(err_msg)
 
     limit = max_items if max_items is not None else config.processing.max_playlist_items
     opts = get_base_ydl_opts()
@@ -454,12 +517,9 @@ def inspect_video(url: str, cookies_path: str | None = None) -> dict[str, Any]:
     Inspect YouTube video to extract all metadata, tags, and transcript preview without downloading.
     Includes exponential retry for network resilience.
     """
-    if len(url) > config.security.max_url_length:
-        raise ValueError(f"URL exceeds maximum allowed length of {config.security.max_url_length} characters")
-
-    parsed = urlparse(url)
-    if parsed.scheme not in ("http", "https") or not parsed.netloc:
-        raise ValueError(f"Not a valid URL: {url}")
+    valid, err_msg = is_valid_youtube_url(url)
+    if not valid:
+        raise ValueError(err_msg)
 
     video_id = extract_video_id(url)
     opts = get_base_ydl_opts(cookies_path)

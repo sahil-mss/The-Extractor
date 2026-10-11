@@ -205,14 +205,10 @@ def api_storage_cleanup(req: CleanupRequest | None = None, authorized: bool = De
 @app.post("/api/inspect")
 def api_inspect(req: InspectRequest, authorized: bool = Depends(verify_api_key)):
     url = req.url.strip()
-    if not url:
-        raise HTTPException(status_code=400, detail="URL is required")
+    valid, err_msg = downloader.is_valid_youtube_url(url)
+    if not valid:
+        raise HTTPException(status_code=400, detail=err_msg)
 
-    if len(url) > config.security.max_url_length:
-        raise HTTPException(
-            status_code=400,
-            detail=f"URL exceeds maximum allowed length of {config.security.max_url_length} characters"
-        )
 
     # Check if playlist
     if downloader.is_playlist_url(url):
@@ -244,10 +240,15 @@ def api_inspect(req: InspectRequest, authorized: bool = Depends(verify_api_key))
 @app.get("/api/check-downloaded")
 def api_check_downloaded(url: str, authorized: bool = Depends(verify_api_key)):
     """Check if URL was already downloaded."""
-    record = database.find_download_by_url(url)
+    clean_url = url.strip()
+    valid, err_msg = downloader.is_valid_youtube_url(clean_url)
+    if not valid:
+        raise HTTPException(status_code=400, detail=err_msg)
+    record = database.find_download_by_url(clean_url)
     if record:
         return {"already_downloaded": True, "record": record}
     return {"already_downloaded": False, "record": None}
+
 
 def run_download_task(task_id: str, req: DownloadRequest):
     already_cancelled = False
@@ -418,18 +419,9 @@ def enqueue_download(req: DownloadRequest) -> str:
 @app.post("/api/download")
 def api_download(req: DownloadRequest, authorized: bool = Depends(verify_api_key)):
     url = req.url.strip()
-    if not url:
-        raise HTTPException(status_code=400, detail="URL is required")
-
-    if len(url) > config.security.max_url_length:
-        raise HTTPException(
-            status_code=400,
-            detail=f"URL exceeds maximum allowed length of {config.security.max_url_length} characters"
-        )
-
-    parsed = downloader.urlparse(url)
-    if parsed.scheme not in ("http", "https") or not parsed.netloc:
-        raise HTTPException(status_code=400, detail=f"Not a valid HTTP/HTTPS URL: {url}")
+    valid, err_msg = downloader.is_valid_youtube_url(url)
+    if not valid:
+        raise HTTPException(status_code=400, detail=err_msg)
 
     task_id = enqueue_download(req)
     return {"status": "started", "task_id": task_id}
@@ -446,6 +438,15 @@ def api_batch_download(req: BatchDownloadRequest, authorized: bool = Depends(ver
             status_code=400,
             detail=f"Batch size exceeds maximum limit of {config.processing.max_batch_size} URLs"
         )
+
+    # Validate each raw URL before expansion
+    for u in raw_urls:
+        valid, err_msg = downloader.is_valid_youtube_url(u)
+        if not valid:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid URL in batch: {err_msg} ({u})"
+            )
 
     # Deduplicate input URLs while preserving order
     deduped_urls = list(dict.fromkeys(raw_urls))
@@ -469,22 +470,15 @@ def api_batch_download(req: BatchDownloadRequest, authorized: bool = Depends(ver
     seen_final = set()
     for u in all_urls:
         if u not in seen_final:
-            if len(u) > config.security.max_url_length:
+            valid, err_msg = downloader.is_valid_youtube_url(u)
+            if not valid:
                 raise HTTPException(
                     status_code=400,
-                    detail=(
-                        f"URL exceeds maximum allowed length of {config.security.max_url_length} "
-                        f"characters: {u[:50]}..."
-                    )
-                )
-            parsed = downloader.urlparse(u)
-            if parsed.scheme not in ("http", "https") or not parsed.netloc:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Not a valid HTTP/HTTPS URL in batch: {u}"
+                    detail=f"Invalid URL in batch: {err_msg} ({u})"
                 )
             seen_final.add(u)
             final_urls.append(u)
+
 
     # Atomically check capacity and allocate all batch TASKS entries under lock
     created_tasks = []
