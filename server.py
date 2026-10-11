@@ -430,7 +430,8 @@ def api_batch_download(req: BatchDownloadRequest, authorized: bool = Depends(ver
                 )
             final_urls.append(u)
 
-    # Check total queue capacity atomically under lock before creating any tasks
+    # Atomically check capacity and allocate all batch TASKS entries under lock
+    created_tasks = []
     with TASKS_LOCK:
         active_count = sum(1 for t in TASKS.values() if t.get("status") in ("queued", "running"))
         if active_count + len(final_urls) > config.processing.max_queue_size:
@@ -440,19 +441,46 @@ def api_batch_download(req: BatchDownloadRequest, authorized: bool = Depends(ver
                 detail=f"Queue capacity exceeded. Available slots: {available_slots}, requested: {len(final_urls)}."
             )
 
+        now = time.time()
+        for u in final_urls:
+            tid = str(uuid.uuid4())
+            sub_req = DownloadRequest(
+                url=u,
+                download_video=req.download_video,
+                download_audio=req.download_audio,
+                download_doc=req.download_doc,
+                video_resolution=req.video_resolution,
+                audio_format=req.audio_format,
+                audio_bitrate=req.audio_bitrate,
+            )
+            TASKS[tid] = {
+                "task_id": tid,
+                "url": u,
+                "status": "queued",
+                "phase": "init",
+                "message": "Queued for download...",
+                "percent": "0%",
+                "speed": "",
+                "eta": "",
+                "results": None,
+                "created_at": now,
+                "finished_at": None,
+            }
+            created_tasks.append((tid, sub_req))
+
+    # Perform DB writes and executor submits outside lock, rolling back on failure
     task_ids = []
-    for u in final_urls:
-        sub_req = DownloadRequest(
-            url=u,
-            download_video=req.download_video,
-            download_audio=req.download_audio,
-            download_doc=req.download_doc,
-            video_resolution=req.video_resolution,
-            audio_format=req.audio_format,
-            audio_bitrate=req.audio_bitrate
-        )
-        task_id = enqueue_download(sub_req)
-        task_ids.append({"task_id": task_id, "url": u})
+    try:
+        for tid, sub_req in created_tasks:
+            database.record_task_created(tid, sub_req.url)
+            executor.submit(run_download_task, tid, sub_req)
+            task_ids.append({"task_id": tid, "url": sub_req.url})
+    except Exception:
+        # Roll back unsubmitted/all created batch tasks from TASKS
+        with TASKS_LOCK:
+            for tid, _ in created_tasks:
+                TASKS.pop(tid, None)
+        raise
 
     return {"status": "started", "tasks": task_ids, "total": len(task_ids)}
 

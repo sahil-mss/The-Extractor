@@ -347,3 +347,38 @@ def test_socket_timeout_and_task_timeout(monkeypatch):
         server.TASKS.clear()
 
 
+def test_batch_download_atomic_rollback_on_db_failure(monkeypatch):
+    import pytest
+
+    import database
+    import server
+
+    # Simulate DB failure on the second item in the batch
+    call_count = 0
+
+    def mock_record_created(tid, url):
+        nonlocal call_count
+        call_count += 1
+        if call_count >= 2:
+            raise RuntimeError("Database failure during batch insert")
+
+    monkeypatch.setattr(database, "record_task_created", mock_record_created)
+
+    with server.TASKS_LOCK:
+        server.TASKS.clear()
+
+    urls = [
+        "https://www.youtube.com/watch?v=batchrb1",
+        "https://www.youtube.com/watch?v=batchrb2",
+        "https://www.youtube.com/watch?v=batchrb3",
+    ]
+
+    with pytest.raises(RuntimeError, match="Database failure during batch insert"):
+        server.api_batch_download(server.BatchDownloadRequest(urls=urls))
+
+    # All created batch tasks must be rolled back from TASKS
+    with server.TASKS_LOCK:
+        assert len(server.TASKS) == 0
+
+
+
