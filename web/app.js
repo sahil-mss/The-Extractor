@@ -1,6 +1,7 @@
 // ==========================================================================
-// THE EXTRACTOR — V2.5 CLIENT SCRIPT (BATCH, HISTORY & FORMATS)
+// THE EXTRACTOR — V2.6.0 CLIENT SCRIPT (BATCH, HISTORY & FORMATS)
 // ==========================================================================
+
 
 const API_BASE = "";
 
@@ -308,10 +309,14 @@ function renderQueue() {
 
 window.cancelTask = async function(taskId) {
   try {
-    await fetch(`${API_BASE}/api/tasks/${taskId}/cancel`, {
+    const res = await fetch(`${API_BASE}/api/tasks/${taskId}/cancel`, {
       method: "POST",
       headers: { ...authHeaders() },
     });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.detail || "Server rejected cancellation");
+    }
     const t = activeTasksMap.get(taskId);
     if (t) {
       t.status = "cancelled";
@@ -320,17 +325,21 @@ window.cancelTask = async function(taskId) {
     }
     showToast("Task cancelled");
   } catch (e) {
-    showToast("Failed to cancel task");
+    showToast(`Failed to cancel task: ${e.message}`);
   }
 };
 
 if (cancelAllBtn) {
   cancelAllBtn.addEventListener("click", async () => {
     try {
-      await fetch(`${API_BASE}/api/tasks/cancel-all`, {
+      const res = await fetch(`${API_BASE}/api/tasks/cancel-all`, {
         method: "POST",
         headers: { ...authHeaders() },
       });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || "Server rejected cancellation");
+      }
       activeTasksMap.forEach((t) => {
         if (t.status === "queued" || t.status === "running") {
           t.status = "cancelled";
@@ -340,10 +349,11 @@ if (cancelAllBtn) {
       renderQueue();
       showToast("All active downloads cancelled");
     } catch (e) {
-      showToast("Failed to cancel downloads");
+      showToast(`Failed to cancel downloads: ${e.message}`);
     }
   });
 }
+
 
 function startBatchPolling() {
   if (batchPollTimer) return;
@@ -538,12 +548,18 @@ function startProgressPolling(taskId) {
         downloadBtn.disabled = false;
         finishedActions.classList.remove("hidden");
         loadHistory();
-      } else if (info.status === "error") {
+      } else if (info.status === "cancelled") {
         clearInterval(pollTimer);
         pollTimer = null;
         downloadBtn.disabled = false;
-        showError(info.message);
+        showToast(info.message || "Download was cancelled");
+      } else if (info.status === "error" || info.status === "interrupted") {
+        clearInterval(pollTimer);
+        pollTimer = null;
+        downloadBtn.disabled = false;
+        showError(info.message || `Download ${info.status}`);
       }
+
     } catch (e) {
       console.error(e);
     }
