@@ -541,8 +541,19 @@ def api_cancel_task(task_id: str, authorized: bool = Depends(verify_api_key)):
         if task_id not in TASKS:
             raise HTTPException(status_code=404, detail="Task not found")
 
+        current_status = TASKS[task_id].get("status")
+        if current_status in ("completed", "error"):
+            # Task already reached a terminal non-cancelled state
+            return {
+                "status": "ignored",
+                "task_id": task_id,
+                "cancelled": False,
+                "task_status": current_status,
+                "message": f"Task already finished with status '{current_status}'",
+            }
+
         CANCELLED_TASKS.add(task_id)
-        if TASKS[task_id]["status"] == "queued":
+        if current_status == "queued":
             TASKS[task_id]["status"] = "cancelled"
             TASKS[task_id]["message"] = "Cancelled before start"
             TASKS[task_id]["finished_at"] = time.time()
@@ -558,7 +569,12 @@ def api_cancel_task(task_id: str, authorized: bool = Depends(verify_api_key)):
             status_override="cancelled",
         )
 
-    return {"status": "success", "task_id": task_id, "cancelled": True}
+    return {
+        "status": "success",
+        "task_id": task_id,
+        "cancelled": True,
+        "task_status": "cancelled",
+    }
 
 @app.post("/api/tasks/cancel-all")
 def api_cancel_all_tasks(authorized: bool = Depends(verify_api_key)):

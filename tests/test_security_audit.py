@@ -421,6 +421,29 @@ def test_security_headers():
     assert res.headers.get("Referrer-Policy") == "no-referrer"
 
 
+def test_cancel_already_finished_task():
+    import server
+
+    task_id = "finished-task-123"
+    with server.TASKS_LOCK:
+        server.TASKS[task_id] = {
+            "task_id": task_id,
+            "url": "https://www.youtube.com/watch?v=done123",
+            "status": "completed",
+        }
+
+    res = client.post(f"/api/tasks/{task_id}/cancel")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["cancelled"] is False
+    assert data["task_status"] == "completed"
+    assert "already finished" in data["message"]
+
+    with server.TASKS_LOCK:
+        server.TASKS.pop(task_id, None)
+
+
+
 
 
 
