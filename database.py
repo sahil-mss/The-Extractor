@@ -58,6 +58,26 @@ def record_task_created(task_id: str, url: str) -> None:
             VALUES (?, ?, 'queued')
         """, (task_id, url))
 
+def record_batch_tasks_created(task_pairs: list[tuple[str, str]]) -> None:
+    """Atomically record multiple created tasks in SQLite within a single transaction."""
+    if not task_pairs:
+        return
+    with get_db_connection() as conn:
+        conn.executemany("""
+            INSERT OR IGNORE INTO extraction_history (task_id, url, status)
+            VALUES (?, ?, 'queued')
+        """, task_pairs)
+
+def rollback_batch_tasks(task_ids: list[str]) -> None:
+    """Remove batch tasks that failed before submission."""
+    if not task_ids:
+        return
+    with get_db_connection() as conn:
+        conn.executemany("""
+            DELETE FROM extraction_history WHERE task_id = ? AND status = 'queued'
+        """, [(tid,) for tid in task_ids])
+
+
 def record_task_completed(
     task_id: str,
     url: str,

@@ -491,16 +491,17 @@ def test_batch_download_atomic_rollback_on_db_failure(monkeypatch):
     import database
     import server
 
-    # Simulate DB failure on the second item in the batch
-    call_count = 0
+    # Simulate DB failure during batch insert
+    def mock_record_batch_fail(task_pairs):
+        raise RuntimeError("Database failure during batch insert")
 
-    def mock_record_created(tid, url):
-        nonlocal call_count
-        call_count += 1
-        if call_count >= 2:
-            raise RuntimeError("Database failure during batch insert")
+    rollback_called_with = []
 
-    monkeypatch.setattr(database, "record_task_created", mock_record_created)
+    def mock_rollback(task_ids):
+        rollback_called_with.extend(task_ids)
+
+    monkeypatch.setattr(database, "record_batch_tasks_created", mock_record_batch_fail)
+    monkeypatch.setattr(database, "rollback_batch_tasks", mock_rollback)
 
     with server.TASKS_LOCK:
         server.TASKS.clear()
@@ -514,9 +515,11 @@ def test_batch_download_atomic_rollback_on_db_failure(monkeypatch):
     with pytest.raises(RuntimeError, match="Database failure during batch insert"):
         server.api_batch_download(server.BatchDownloadRequest(urls=urls))
 
-    # All created batch tasks must be rolled back from TASKS
+    # All created batch tasks must be rolled back from TASKS and from DB
     with server.TASKS_LOCK:
         assert len(server.TASKS) == 0
+    assert len(rollback_called_with) == 3
+
 
 
 def test_batch_download_playlist_expansion_failure_skipped(monkeypatch):
