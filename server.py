@@ -12,10 +12,10 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator, model_validator
 
 import database
 import downloader
@@ -25,6 +25,11 @@ logger = logging.getLogger("the_extractor")
 
 # Validate binding and auth on module startup
 validate_startup_security(config)
+
+VALID_RESOLUTIONS = {"best", "1080p", "720p", "480p"}
+VALID_AUDIO_FORMATS = {"mp3", "wav", "m4a"}
+VALID_AUDIO_BITRATES = {"128", "192", "320"}
+
 
 
 @asynccontextmanager
@@ -133,6 +138,36 @@ class DownloadRequest(BaseModel):
     audio_format: str = config.defaults.audio_format
     audio_bitrate: str = config.defaults.audio_bitrate
 
+    @field_validator("video_resolution")
+    @classmethod
+    def validate_resolution(cls, v: str) -> str:
+        clean = (v or "").strip().lower()
+        if clean not in VALID_RESOLUTIONS:
+            raise ValueError(f"Invalid video_resolution '{v}'. Allowed: {sorted(VALID_RESOLUTIONS)}")
+        return clean
+
+    @field_validator("audio_format")
+    @classmethod
+    def validate_audio_format(cls, v: str) -> str:
+        clean = (v or "").strip().lower()
+        if clean not in VALID_AUDIO_FORMATS:
+            raise ValueError(f"Invalid audio_format '{v}'. Allowed: {sorted(VALID_AUDIO_FORMATS)}")
+        return clean
+
+    @field_validator("audio_bitrate")
+    @classmethod
+    def validate_audio_bitrate(cls, v: str) -> str:
+        clean = (v or "").strip()
+        if clean not in VALID_AUDIO_BITRATES:
+            raise ValueError(f"Invalid audio_bitrate '{v}'. Allowed: {sorted(VALID_AUDIO_BITRATES)}")
+        return clean
+
+    @model_validator(mode="after")
+    def validate_at_least_one_output(self) -> "DownloadRequest":
+        if not (self.download_video or self.download_audio or self.download_doc):
+            raise ValueError("At least one output option (video, audio, or metadata document) must be enabled")
+        return self
+
 class BatchDownloadRequest(BaseModel):
     urls: list[str]
     download_video: bool = config.defaults.download_video
@@ -141,6 +176,37 @@ class BatchDownloadRequest(BaseModel):
     video_resolution: str = config.defaults.video_resolution
     audio_format: str = config.defaults.audio_format
     audio_bitrate: str = config.defaults.audio_bitrate
+
+    @field_validator("video_resolution")
+    @classmethod
+    def validate_resolution(cls, v: str) -> str:
+        clean = (v or "").strip().lower()
+        if clean not in VALID_RESOLUTIONS:
+            raise ValueError(f"Invalid video_resolution '{v}'. Allowed: {sorted(VALID_RESOLUTIONS)}")
+        return clean
+
+    @field_validator("audio_format")
+    @classmethod
+    def validate_audio_format(cls, v: str) -> str:
+        clean = (v or "").strip().lower()
+        if clean not in VALID_AUDIO_FORMATS:
+            raise ValueError(f"Invalid audio_format '{v}'. Allowed: {sorted(VALID_AUDIO_FORMATS)}")
+        return clean
+
+    @field_validator("audio_bitrate")
+    @classmethod
+    def validate_audio_bitrate(cls, v: str) -> str:
+        clean = (v or "").strip()
+        if clean not in VALID_AUDIO_BITRATES:
+            raise ValueError(f"Invalid audio_bitrate '{v}'. Allowed: {sorted(VALID_AUDIO_BITRATES)}")
+        return clean
+
+    @model_validator(mode="after")
+    def validate_at_least_one_output(self) -> "BatchDownloadRequest":
+        if not (self.download_video or self.download_audio or self.download_doc):
+            raise ValueError("At least one output option (video, audio, or metadata document) must be enabled")
+        return self
+
 
 class AudacityRequest(BaseModel):
     file_path: str | None = None
@@ -637,20 +703,26 @@ def api_cancel_all_tasks(authorized: bool = Depends(verify_api_key)):
 # History Endpoints with Pagination & Retention
 @app.get("/api/history")
 def api_get_history(
-    limit: int = 50,
-    offset: int = 0,
-    page: int = 1,
-    page_size: int = 50,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
     search: str | None = None,
     authorized: bool = Depends(verify_api_key)
 ):
+
+    safe_limit = max(1, min(limit, 200))
+    safe_page_size = max(1, min(page_size, 200))
+    safe_page = max(1, page)
+
     # Support both page/page_size and limit/offset for backward compatibility
-    if page > 1 or page_size != 50:
-        paginated = database.get_history_paginated(page=page, page_size=page_size, search=search)
+    if safe_page > 1 or safe_page_size != 50:
+        paginated = database.get_history_paginated(page=safe_page, page_size=safe_page_size, search=search)
         return {"status": "success", "history": paginated["items"], **paginated}
 
-    paginated = database.get_history_paginated(page=1, page_size=limit, search=search)
+    paginated = database.get_history_paginated(page=1, page_size=safe_limit, search=search)
     return {"status": "success", "history": paginated["items"], **paginated}
+
 
 @app.delete("/api/history/{item_id}")
 def api_delete_history(item_id: int, delete_files: bool = False, authorized: bool = Depends(verify_api_key)):

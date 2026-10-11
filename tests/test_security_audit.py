@@ -214,6 +214,39 @@ def test_batch_download_url_validation():
     assert "Invalid URL in batch" in res_ssrf.json()["detail"]
 
 
+def test_input_validation_allowlists_and_bounds():
+    # 1. Invalid video resolution
+    res_res = client.post("/api/download", json={
+        "url": "https://www.youtube.com/watch?v=validres01",
+        "video_resolution": "4k_super_ultra",
+    })
+    assert res_res.status_code == 422
+
+    # 2. Invalid audio format
+    res_fmt = client.post("/api/download", json={
+        "url": "https://www.youtube.com/watch?v=validfmt01",
+        "audio_format": "flac",
+    })
+    assert res_fmt.status_code == 422
+
+    # 3. Invalid audio bitrate
+    res_bit = client.post("/api/download", json={
+        "url": "https://www.youtube.com/watch?v=validbit01",
+        "audio_bitrate": "999",
+    })
+    assert res_bit.status_code == 422
+
+    # 4. All download options False must be rejected
+    res_none = client.post("/api/download", json={
+        "url": "https://www.youtube.com/watch?v=validnone1",
+        "download_video": False,
+        "download_audio": False,
+        "download_doc": False,
+    })
+    assert res_none.status_code == 422
+
+
+
 
 def test_batch_download_atomic_queue_limit(monkeypatch):
     import server
