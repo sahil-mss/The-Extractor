@@ -3,6 +3,7 @@ import platform
 import re
 import shutil
 import sys
+import threading
 import time
 from collections.abc import Callable
 from typing import Any
@@ -65,47 +66,62 @@ def find_ffmpeg_bin() -> str | None:
 def _parse_ver(v: str) -> tuple[int, ...]:
     return tuple(int(p) for p in v.split("."))
 
-def check_ytdlp_version() -> dict[str, Any]:
+_YTDLP_VERSION_CACHE: dict[str, Any] | None = None
+_YTDLP_VERSION_CACHE_TIME: float = 0.0
+_YTDLP_VERSION_LOCK = threading.Lock()
+
+
+def check_ytdlp_version(force_refresh: bool = False) -> dict[str, Any]:
     """
     Checks the installed yt-dlp version against PyPI's latest release.
+    Caches the result for 1 hour (3600 seconds) to avoid blocking network calls.
     Returns status info including whether it is outdated.
     """
-    current_ver = getattr(yt_dlp, "version", None)
-    if current_ver:
-        installed_ver = getattr(current_ver, "__version__", "unknown")
-    else:
-        installed_ver = getattr(yt_dlp, "__version__", "unknown")
+    global _YTDLP_VERSION_CACHE, _YTDLP_VERSION_CACHE_TIME
 
-    result = {
-        "installed": installed_ver,
-        "latest": None,
-        "is_outdated": False,
-        "checked": False,
-    }
+    with _YTDLP_VERSION_LOCK:
+        now = time.time()
+        if not force_refresh and _YTDLP_VERSION_CACHE is not None and (now - _YTDLP_VERSION_CACHE_TIME < 3600):
+            return dict(_YTDLP_VERSION_CACHE)
 
-    try:
-        import json
-        import urllib.request
-        req = urllib.request.Request(
-            "https://pypi.org/pypi/yt-dlp/json",
-            headers={"User-Agent": "TheExtractor/2.5.0"}
-        )
-        with urllib.request.urlopen(req, timeout=3.0) as resp:
-            if resp.status == 200:
-                data = json.loads(resp.read().decode("utf-8"))
-                latest_ver = data.get("info", {}).get("version")
-                if latest_ver:
-                    result["latest"] = latest_ver
-                    result["checked"] = True
-                    try:
-                        result["is_outdated"] = _parse_ver(latest_ver) > _parse_ver(installed_ver)
-                    except ValueError:
-                        result["is_outdated"] = (latest_ver != installed_ver)
-    except Exception:
-        # Offline or PyPI unreachable: graceful fallback
-        pass
+        current_ver = getattr(yt_dlp, "version", None)
+        if current_ver:
+            installed_ver = getattr(current_ver, "__version__", "unknown")
+        else:
+            installed_ver = getattr(yt_dlp, "__version__", "unknown")
 
-    return result
+        result = {
+            "installed": installed_ver,
+            "latest": None,
+            "is_outdated": False,
+            "checked": False,
+        }
+
+        try:
+            import json
+            import urllib.request
+            req = urllib.request.Request(
+                "https://pypi.org/pypi/yt-dlp/json",
+                headers={"User-Agent": "TheExtractor/2.5.0"}
+            )
+            with urllib.request.urlopen(req, timeout=3.0) as resp:
+                if resp.status == 200:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    latest_ver = data.get("info", {}).get("version")
+                    if latest_ver:
+                        result["latest"] = latest_ver
+                        result["checked"] = True
+                        try:
+                            result["is_outdated"] = _parse_ver(latest_ver) > _parse_ver(installed_ver)
+                        except ValueError:
+                            result["is_outdated"] = (latest_ver != installed_ver)
+        except Exception:
+            # Offline or PyPI unreachable: graceful fallback
+            pass
+
+        _YTDLP_VERSION_CACHE = dict(result)
+        _YTDLP_VERSION_CACHE_TIME = now
+        return result
 
 
 def get_storage_stats(directory: str | None = None) -> dict[str, Any]:

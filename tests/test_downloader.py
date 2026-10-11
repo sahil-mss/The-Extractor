@@ -220,5 +220,36 @@ def test_inspect_video_invalid_url_raises_value_error():
         inspect_video("invalid-url-format")
 
 
+def test_check_ytdlp_version_caches_for_one_hour(monkeypatch):
+    import urllib.request
 
+    import downloader
 
+    call_count = 0
+
+    class DummyResponse:
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            pass
+
+        def read(self):
+            nonlocal call_count
+            call_count += 1
+            return b'{"info": {"version": "2026.10.01"}}'
+
+    monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout=3.0: DummyResponse())
+
+    downloader._YTDLP_VERSION_CACHE = None
+    downloader._YTDLP_VERSION_CACHE_TIME = 0.0
+
+    res1 = downloader.check_ytdlp_version(force_refresh=True)
+    assert call_count == 1
+    assert res1["latest"] == "2026.10.01"
+
+    res2 = downloader.check_ytdlp_version()
+    assert call_count == 1
+    assert res2["latest"] == "2026.10.01"
