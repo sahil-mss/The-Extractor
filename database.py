@@ -277,6 +277,31 @@ def clear_all_history(delete_files: bool = False) -> None:
                             pass
         conn.execute("DELETE FROM extraction_history")
 
+
+def null_deleted_file_paths(file_paths: list[str]) -> int:
+    """Null matching path columns in extraction_history for files that were deleted."""
+    if not file_paths:
+        return 0
+
+    norm_paths = {os.path.normpath(p) for p in file_paths}
+    updated_count = 0
+
+    with get_db_connection() as conn:
+        for p in norm_paths:
+            cur = conn.execute("""
+                UPDATE extraction_history
+                SET video_path = CASE WHEN video_path = ? THEN NULL ELSE video_path END,
+                    audio_path = CASE WHEN audio_path = ? THEN NULL ELSE audio_path END,
+                    doc_md_path = CASE WHEN doc_md_path = ? THEN NULL ELSE doc_md_path END,
+                    doc_txt_path = CASE WHEN doc_txt_path = ? THEN NULL ELSE doc_txt_path END
+                WHERE video_path = ? OR audio_path = ? OR doc_md_path = ? OR doc_txt_path = ?
+            """, (p, p, p, p, p, p, p, p))
+            updated_count += cur.rowcount
+
+    return updated_count
+
+
 # Auto-initialize on import
 init_db()
+
 

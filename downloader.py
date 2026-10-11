@@ -165,7 +165,11 @@ def perform_storage_cleanup(
     max_gb = max_storage_gb if max_storage_gb is not None else config.storage.max_storage_gb
     after_days = delete_after_days if delete_after_days is not None else config.storage.delete_after_days
 
-    # Collect all files with mtime and size
+    # Allowed extensions to clean up; protect intermediate, active, and git files
+    allowed_extensions = {".mp4", ".mp3", ".wav", ".m4a", ".md", ".txt"}
+    min_age_seconds = 600  # 10 minutes: skip anything modified in the last 10 minutes
+
+    # Collect eligible files with mtime and size
     file_entries = []
     total_bytes = 0
     now = time.time()
@@ -173,8 +177,16 @@ def perform_storage_cleanup(
     for root, _, files in os.walk(target_dir):
         for f in files:
             fp = os.path.join(root, f)
+            ext = os.path.splitext(f)[1].lower()
+            if ext not in allowed_extensions or f == ".gitkeep" or f.endswith(".part") or f.endswith(".ytdl"):
+                continue
+
             try:
                 stat = os.stat(fp)
+                # Skip files modified in the last 10 minutes
+                if (now - stat.st_mtime) < min_age_seconds:
+                    continue
+
                 file_entries.append({"path": fp, "size": stat.st_size, "mtime": stat.st_mtime})
                 total_bytes += stat.st_size
             except OSError:
@@ -185,6 +197,7 @@ def perform_storage_cleanup(
 
     deleted_count = 0
     freed_bytes = 0
+    deleted_paths: list[str] = []
 
     # 1. Clean by age if configured
     if after_days and after_days > 0:
@@ -197,6 +210,7 @@ def perform_storage_cleanup(
                     deleted_count += 1
                     freed_bytes += entry["size"]
                     total_bytes -= entry["size"]
+                    deleted_paths.append(entry["path"])
                 except OSError:
                     remaining_entries.append(entry)
             else:
@@ -214,8 +228,16 @@ def perform_storage_cleanup(
                 deleted_count += 1
                 freed_bytes += entry["size"]
                 total_bytes -= entry["size"]
+                deleted_paths.append(entry["path"])
             except OSError:
                 pass
+
+    if deleted_paths:
+        try:
+            import database
+            database.null_deleted_file_paths(deleted_paths)
+        except Exception:
+            pass
 
     return {
         "deleted_files": deleted_count,

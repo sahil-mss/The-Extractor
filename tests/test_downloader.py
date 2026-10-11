@@ -132,10 +132,32 @@ def test_storage_stats_and_cleanup(tmp_path):
 
     f2 = tmp_path / "video2.mp4"
     f2.write_bytes(b"B" * 2000)
+    # Set mtime to 1 hour ago (> 10 minutes)
+    hour_ago = time.time() - 3600
+    os.utime(f2, (hour_ago, hour_ago))
+
+    # Add .gitkeep and .part file - both must be preserved!
+    gitkeep = tmp_path / ".gitkeep"
+    gitkeep.write_bytes(b"")
+    os.utime(gitkeep, (old_time, old_time))
+
+    part_file = tmp_path / "video_partial.mp4.part"
+    part_file.write_bytes(b"partial")
+    os.utime(part_file, (old_time, old_time))
+
+    # Also register f1 in database to verify path nulling
+    import database
+    database.init_db()
+    database.record_task_completed(
+        task_id="cleanup-test-task",
+        url="https://youtube.com/watch?v=cleanuptest1",
+        info={},
+        results={"video_file": str(f1)},
+    )
 
     stats = get_storage_stats(str(tmp_path))
-    assert stats["file_count"] == 2
-    assert stats["total_bytes"] == 3000
+    assert stats["file_count"] == 4
+    assert stats["total_bytes"] == 3007
 
     # Cleanup by age: delete older than 5 days
     cleanup_res = perform_storage_cleanup(str(tmp_path), delete_after_days=5)
@@ -143,11 +165,20 @@ def test_storage_stats_and_cleanup(tmp_path):
     assert cleanup_res["freed_bytes"] == 1000
     assert not f1.exists()
     assert f2.exists()
+    assert gitkeep.exists()
+    assert part_file.exists()
+
+    # Verify matching path column in extraction_history was set to NULL
+    with database.get_db_connection() as conn:
+        row = conn.execute("SELECT video_path FROM extraction_history WHERE task_id = 'cleanup-test-task'").fetchone()
+        assert row["video_path"] is None
 
     # Cleanup by size cap: cap at very small size
     cleanup_res2 = perform_storage_cleanup(str(tmp_path), max_storage_gb=0.0000001)
     assert cleanup_res2["deleted_files"] == 1
     assert not f2.exists()
+    assert gitkeep.exists()
+    assert part_file.exists()
 
 def test_check_ytdlp_version():
     from downloader import check_ytdlp_version
