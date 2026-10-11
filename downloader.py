@@ -24,6 +24,30 @@ class DownloadCancelled(Exception):
     pass
 
 
+class PermanentMediaError(RuntimeError):
+    """Raised when media is permanently unavailable, private, or age-restricted (non-retryable)."""
+    pass
+
+
+def is_permanent_error(err: Exception | str) -> bool:
+    msg = str(err).lower()
+    permanent_patterns = [
+        "video unavailable",
+        "this video is unavailable",
+        "private video",
+        "this video is private",
+        "sign in if you've been granted access",
+        "sign in to confirm your age",
+        "age-restricted",
+        "confirm your age",
+        "account associated with this video has been terminated",
+        "copyright claim",
+        "removed by the uploader",
+    ]
+    return any(p in msg for p in permanent_patterns)
+
+
+
 def clean_leftover_partial_files(target_dir: str, vid_id: str) -> None:
     """Removes leftover *.part and *.ytdl files for the specified video ID."""
     if not os.path.isdir(target_dir) or not vid_id:
@@ -447,6 +471,8 @@ def inspect_video(url: str, cookies_path: str | None = None) -> dict[str, Any]:
                 break
         except Exception as e:
             last_err = e
+            if is_permanent_error(e):
+                raise PermanentMediaError(f"Permanent media error: {e}") from e
             time.sleep(config.processing.retry_delay_seconds * (attempt + 1))
     else:
         raise RuntimeError(f"Failed to inspect video after {config.processing.max_retries} attempts: {last_err}")

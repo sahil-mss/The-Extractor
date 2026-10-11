@@ -253,3 +253,69 @@ def test_check_ytdlp_version_caches_for_one_hour(monkeypatch):
     res2 = downloader.check_ytdlp_version()
     assert call_count == 1
     assert res2["latest"] == "2026.10.01"
+
+
+def test_inspect_video_fails_fast_on_permanent_error(monkeypatch):
+    import pytest
+    import yt_dlp
+
+    from downloader import PermanentMediaError, inspect_video
+
+    attempts = 0
+
+    class FailingYoutubeDL:
+        def __init__(self, opts):
+            self.opts = opts
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            pass
+
+        def extract_info(self, url, download=False):
+            nonlocal attempts
+            attempts += 1
+            raise yt_dlp.utils.DownloadError("ERROR: Video unavailable. This video is private.")
+
+    monkeypatch.setattr(yt_dlp, "YoutubeDL", FailingYoutubeDL)
+
+    with pytest.raises(PermanentMediaError, match="Permanent media error"):
+        inspect_video("https://www.youtube.com/watch?v=private123")
+
+    # Must fail immediately without retrying
+    assert attempts == 1
+
+
+def test_inspect_video_retries_transient_error(monkeypatch):
+    import pytest
+    import yt_dlp
+
+    from config import config
+    from downloader import inspect_video
+
+    attempts = 0
+
+    class TransientFailYoutubeDL:
+        def __init__(self, opts):
+            self.opts = opts
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            pass
+
+        def extract_info(self, url, download=False):
+            nonlocal attempts
+            attempts += 1
+            raise yt_dlp.utils.DownloadError("HTTP Error 429: Too Many Requests")
+
+    monkeypatch.setattr(yt_dlp, "YoutubeDL", TransientFailYoutubeDL)
+    monkeypatch.setattr(config.processing, "retry_delay_seconds", 0.01)
+
+    with pytest.raises(RuntimeError, match="Failed to inspect video after"):
+        inspect_video("https://www.youtube.com/watch?v=busy123")
+
+    # Should have retried max_retries times
+    assert attempts == config.processing.max_retries
