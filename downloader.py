@@ -51,13 +51,22 @@ def is_valid_youtube_url(url: str) -> tuple[bool, str]:
     if parsed.scheme.lower() not in ("http", "https"):
         return False, "Not a valid URL: Only HTTP and HTTPS URLs are allowed"
 
-    netloc = parsed.netloc.lower()
-    if not netloc:
+    # Reject URLs containing userinfo (username / password), e.g. user:pass@host
+    if parsed.username or parsed.password:
+        return False, "URLs with embedded userinfo credentials are not allowed"
+
+    # Validate port: only None, 80, 443 are permitted
+    try:
+        port = parsed.port
+        if port not in (None, 80, 443):
+            return False, f"Prohibited port '{port}'. Only standard ports (80, 443) are allowed"
+    except (ValueError, TypeError) as e:
+        return False, f"Invalid port: {e}"
+
+    # Take host strictly from parsed.hostname (lowercase), never netloc
+    host = (parsed.hostname or "").lower().strip()
+    if not host:
         return False, "Not a valid URL: missing host"
-
-
-    # Strip port if present
-    host = netloc.split(":")[0]
 
     # Block IP literals (IPv4 and IPv6) to prevent SSRF against internal/cloud metadata services
     try:
@@ -66,17 +75,17 @@ def is_valid_youtube_url(url: str) -> tuple[bool, str]:
     except ValueError:
         pass
 
-
     # Reject localhost / internal hostnames
     if host in {"localhost", "localhost.localdomain", "broadcasthost"}:
         return False, f"Localhost destinations are not allowed: {host}"
 
-    # Enforce allowed YouTube domains
-    if host not in ALLOWED_YOUTUBE_DOMAINS:
+    # Match allowlist strictly: host == d or host.endswith("." + d)
+    matches_allowlist = any(host == d or host.endswith("." + d) for d in ALLOWED_YOUTUBE_DOMAINS)
+    if not matches_allowlist:
         return False, f"Host '{host}' is not a recognized YouTube domain"
 
     # For youtu.be, ensure there is a non-empty path (the video ID)
-    if host in ("youtu.be", "www.youtu.be"):
+    if host == "youtu.be":
         path_parts = [p for p in parsed.path.split("/") if p]
         if not path_parts:
             return False, "Invalid youtu.be URL: missing video ID path"
@@ -401,8 +410,8 @@ def is_playlist_url(url: str) -> bool:
             return False
 
         # If it's a shortlink like youtu.be/VIDEO_ID?list=..., treat as single video
-        netloc = parsed.netloc.lower()
-        if "youtu.be" in netloc:
+        hostname = (parsed.hostname or "").lower()
+        if hostname == "youtu.be":
             path_parts = [p for p in parsed.path.split("/") if p]
             if path_parts:
                 return False
@@ -436,6 +445,7 @@ def get_base_ydl_opts(cookies_path: str | None = None) -> dict[str, Any]:
     opts: dict[str, Any] = {
         'quiet': True,
         'no_warnings': True,
+        'allowed_extractors': ['youtube.*'],
         'socket_timeout': 30,
         'retries': config.processing.max_retries,
         'fragment_retries': config.processing.max_retries,

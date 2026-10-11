@@ -196,24 +196,80 @@ def test_download_endpoint_url_validation():
     assert res_file.status_code == 400
     assert "Only HTTP and HTTPS URLs are allowed" in res_file.json()["detail"]
 
-    # SEC-01 SSRF tests: Loopback, private IP literals, and metadata services must be rejected
-    ssrf_urls = [
-        "http://127.0.0.1/admin",
-        "http://169.254.169.254/latest/meta-data/",
-        "http://10.0.0.1:8080/internal",
-        "http://192.168.1.1/setup",
-        "http://[::1]/secret",
-        "http://localhost:5000/api",
-        "https://evil.com/video",
-        "https://vimeo.com/123456",
-    ]
-    for bad_url in ssrf_urls:
-        res_bad = client.post("/api/download", json={"url": bad_url})
-        assert res_bad.status_code == 400
-        assert any(
-            msg in res_bad.json()["detail"]
-            for msg in ["IP-literal", "Localhost", "not a recognized YouTube domain", "Only HTTP and HTTPS"]
-        )
+
+@pytest.mark.parametrize("bypass_url", [
+    "https://youtube.com:443@127.0.0.1/",
+    "http://youtube.com:80@127.0.0.1:8099/admin",
+    "https://www.youtube.com@evil.com/x",
+    "https://user:pw@www.youtube.com/watch?v=dQw4w9WgXcQ",
+    "https://www.youtube.com:8080/watch?v=dQw4w9WgXcQ",
+    "https://youtube.com.evil.com/x",
+    "https://[::1]/x",
+    "http://169.254.169.254/latest/meta-data/",
+    "https://youtu.be.evil.com/x",
+    "http://127.0.0.1/admin",
+    "http://10.0.0.1:8080/internal",
+    "http://192.168.1.1/setup",
+    "http://localhost:5000/api",
+    "https://evil.com/video",
+    "https://vimeo.com/123456",
+])
+def test_url_validator_bypass_rejections(bypass_url):
+    import downloader
+    valid, err_msg = downloader.is_valid_youtube_url(bypass_url)
+    assert valid is False
+    assert err_msg != ""
+
+    res = client.post("/api/inspect", json={"url": bypass_url})
+    assert res.status_code == 400
+
+    res_dl = client.post("/api/download", json={"url": bypass_url})
+    assert res_dl.status_code == 400
+
+
+@pytest.mark.parametrize("valid_url", [
+    "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    "https://youtu.be/dQw4w9WgXcQ",
+    "https://music.youtube.com/watch?v=dQw4w9WgXcQ",
+])
+def test_url_validator_accepts_valid_urls(valid_url):
+    import downloader
+    valid, err_msg = downloader.is_valid_youtube_url(valid_url)
+    assert valid is True
+    assert err_msg == ""
+
+
+def test_integration_bypass_url_listener_receives_nothing():
+    import http.server
+    import threading
+
+    requests_received = []
+
+    class DummyHandler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            requests_received.append(self.path)
+            self.send_response(200)
+            self.end_headers()
+        def do_POST(self):
+            requests_received.append(self.path)
+            self.send_response(200)
+            self.end_headers()
+        def log_message(self, format, *args):
+            pass
+
+    server = http.server.HTTPServer(("127.0.0.1", 0), DummyHandler)
+    port = server.server_address[1]
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+
+    try:
+        bypass_url = f"http://youtube.com:80@127.0.0.1:{port}/bypass-test"
+        res = client.post("/api/inspect", json={"url": bypass_url})
+        assert res.status_code == 400
+        assert len(requests_received) == 0
+    finally:
+        server.shutdown()
+        server.server_close()
 
 
 def test_batch_download_url_validation():
