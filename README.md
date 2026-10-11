@@ -104,7 +104,13 @@ To deploy containerized with FFmpeg pre-bundled:
 ```bash
 docker compose up -d
 ```
-Access the dashboard at `http://localhost:8000`. All downloaded files persist in `./downloads`.
+Access the dashboard at `http://localhost:8000`. All downloaded files persist in `./downloads` and database records persist in `./data`.
+
+> [!NOTE]
+> **Linux Host Permissions:** The compose service runs with `user: "${UID:-1000}:${GID:-1000}"`. If your host directories were created by root or owned by another UID, ensure write permissions before starting:
+> ```bash
+> mkdir -p downloads data && sudo chown -R 1000:1000 downloads data
+> ```
 
 ### 4. Background System Service (Linux / VPS)
 
