@@ -1,4 +1,6 @@
 import argparse
+import os
+import subprocess
 import sys
 import threading
 import time
@@ -8,6 +10,18 @@ import uvicorn
 
 import database
 from config import config, validate_startup_security
+
+
+def auto_update_ytdlp_if_enabled():
+    """If EXTRACTOR_AUTO_UPDATE_YTDLP=1, update yt-dlp before server starts."""
+    if os.environ.get("EXTRACTOR_AUTO_UPDATE_YTDLP") in ("1", "true", "True"):
+        print("  🔄 Checking/updating yt-dlp (EXTRACTOR_AUTO_UPDATE_YTDLP enabled)...")
+        try:
+            cmd = [sys.executable, "-m", "pip", "install", "--user", "-U", "yt-dlp"]
+            subprocess.run(cmd, check=True)
+            print("  ✅ yt-dlp updated successfully.")
+        except Exception as e:
+            print(f"  ⚠️ Warning: Failed to update yt-dlp: {e}", file=sys.stderr)
 
 
 def open_browser_delayed(url: str, delay: float = 1.2):
@@ -50,6 +64,9 @@ def main():
     print(f"  Config:    {config.paths.download_dir}")
     print(f"  Downloads: {config.absolute_download_dir}")
     print(f"  Database:  {config.database_path}")
+
+    # Check opt-in yt-dlp auto-update
+    auto_update_ytdlp_if_enabled()
 
     # Enforce startup security
     try:

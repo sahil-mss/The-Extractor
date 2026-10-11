@@ -112,6 +112,16 @@ Access the dashboard at `http://localhost:8000`. All downloaded files persist in
 > mkdir -p downloads data && sudo chown -R 1000:1000 downloads data
 > ```
 
+> [!TIP]
+> **Keeping yt-dlp Updated in Docker:**
+> YouTube extractors evolve frequently. You can:
+> - Enable automated startup upgrades by setting `EXTRACTOR_AUTO_UPDATE_YTDLP=1` in your environment or `docker-compose.yml`.
+> - Or manually rebuild the container image without cache:
+>   ```bash
+>   docker compose build --pull --no-cache
+>   docker compose up -d
+>   ```
+
 ### 4. Background System Service (Linux / VPS)
 
 To run The Extractor permanently as a systemd service:

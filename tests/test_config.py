@@ -58,3 +58,25 @@ def test_audacity_resolver_platform_branches(monkeypatch):
     monkeypatch.setattr("platform.system", lambda: "Linux")
     monkeypatch.setattr("os.path.exists", lambda path: True if path == "/usr/bin/audacity" else False)
     assert cfg.get_audacity_executable() == "/usr/bin/audacity"
+
+
+def test_auto_update_ytdlp_if_enabled(monkeypatch):
+    import main
+
+    called_cmds = []
+
+    def mock_run(cmd, check=True):
+        called_cmds.append(cmd)
+
+    monkeypatch.setattr("subprocess.run", mock_run)
+
+    # When disabled (default)
+    monkeypatch.delenv("EXTRACTOR_AUTO_UPDATE_YTDLP", raising=False)
+    main.auto_update_ytdlp_if_enabled()
+    assert len(called_cmds) == 0
+
+    # When enabled
+    monkeypatch.setenv("EXTRACTOR_AUTO_UPDATE_YTDLP", "1")
+    main.auto_update_ytdlp_if_enabled()
+    assert len(called_cmds) == 1
+    assert "yt-dlp" in called_cmds[0]
