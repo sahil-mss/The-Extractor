@@ -4,10 +4,21 @@ import pytest
 from fastapi.testclient import TestClient
 
 import database
+import server
 from config import Config, config, validate_startup_security
 from server import app
 
 client = TestClient(app)
+
+@pytest.fixture(autouse=True)
+def reset_server_state():
+    with server.TASKS_LOCK:
+        server.TASKS.clear()
+        server.CANCELLED_TASKS.clear()
+    yield
+    with server.TASKS_LOCK:
+        server.TASKS.clear()
+        server.CANCELLED_TASKS.clear()
 
 def test_startup_security_validation():
     # 1. Non-localhost (0.0.0.0 and LAN IP) without API key must raise RuntimeError
@@ -131,33 +142,39 @@ def test_safe_download_path_validation(tmp_path):
     assert database.is_safe_download_path("") is False
 
 def test_history_pagination_and_retention(tmp_path):
+    orig_db = database.DB_PATH
     test_db = str(tmp_path / "test_pagination.db")
-    database.DB_PATH = test_db
-    database.init_db()
+    try:
+        database.DB_PATH = test_db
+        database.init_db()
+        with database.get_db_connection() as conn:
+            conn.execute("DELETE FROM extraction_history")
 
-    # Populate 15 dummy records
-    for i in range(15):
-        database.record_task_completed(
-            task_id=f"hist-task-{i}",
-            url=f"https://youtube.com/watch?v=vid{i:03d}",
-            info={"id": f"vid{i:03d}", "title": f"Video {i}"},
-            results={},
-        )
+        # Populate 15 dummy records
+        for i in range(15):
+            database.record_task_completed(
+                task_id=f"hist-task-{i}",
+                url=f"https://youtube.com/watch?v=vid{i:03d}",
+                info={"id": f"vid{i:03d}", "title": f"Video {i}"},
+                results={},
+            )
 
-    # Test paginated query
-    res = database.get_history_paginated(page=1, page_size=5)
-    assert res["total"] == 15
-    assert len(res["items"]) == 5
-    assert res["page"] == 1
-    assert res["page_size"] == 5
+        # Test paginated query
+        res = database.get_history_paginated(page=1, page_size=5)
+        assert res["total"] == 15
+        assert len(res["items"]) == 5
+        assert res["page"] == 1
+        assert res["page_size"] == 5
 
-    res_p2 = database.get_history_paginated(page=2, page_size=5)
-    assert len(res_p2["items"]) == 5
+        res_p2 = database.get_history_paginated(page=2, page_size=5)
+        assert len(res_p2["items"]) == 5
 
-    # Test retention pruning
-    prune_res = database.apply_history_retention(max_records=10)
-    assert prune_res["deleted_records"] == 5
-    assert database.get_history_paginated(page=1, page_size=50)["total"] == 10
+        # Test retention pruning
+        prune_res = database.apply_history_retention(max_records=10)
+        assert prune_res["deleted_records"] == 5
+        assert database.get_history_paginated(page=1, page_size=50)["total"] == 10
+    finally:
+        database.DB_PATH = orig_db
 
 def test_already_downloaded_detection(tmp_path):
     test_db = str(tmp_path / "test_already_dl.db")

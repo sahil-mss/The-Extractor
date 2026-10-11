@@ -630,7 +630,12 @@ def api_progress(task_id: str, authorized: bool = Depends(verify_api_key)):
     with TASKS_LOCK:
         if task_id not in TASKS:
             raise HTTPException(status_code=404, detail="Task not found")
-        return TASKS[task_id].copy()
+        task_data = TASKS[task_id].copy()
+        if task_id in CANCELLED_TASKS and task_data.get("status") not in ("completed", "error"):
+            task_data["status"] = "cancelled"
+            if not task_data.get("message") or task_data.get("message") == "Processing download...":
+                task_data["message"] = "Download cancelled by user"
+        return task_data
 
 # Task cancellation endpoint (EXT-006)
 @app.post("/api/tasks/{task_id}/cancel")

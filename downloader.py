@@ -542,10 +542,14 @@ def fetch_transcript_data(video_id: str, ydl_info: dict | None = None) -> list[d
 
     return transcript_items
 
-def inspect_video(url: str, cookies_path: str | None = None) -> dict[str, Any]:
+def inspect_video(
+    url: str,
+    cookies_path: str | None = None,
+    is_cancelled: Callable[[], bool] | None = None,
+) -> dict[str, Any]:
     """
     Inspect YouTube video to extract all metadata, tags, and transcript preview without downloading.
-    Includes exponential retry for network resilience.
+    Includes exponential retry for network resilience with cancel-aware backoff.
     """
     valid, err_msg = is_valid_youtube_url(url)
     if not valid:
@@ -556,10 +560,10 @@ def inspect_video(url: str, cookies_path: str | None = None) -> dict[str, Any]:
     opts['skip_download'] = True
     opts['extract_flat'] = False
 
-
-
     last_err = None
     for attempt in range(config.processing.max_retries):
+        if is_cancelled and is_cancelled():
+            raise DownloadCancelled("Task was cancelled by user")
         try:
             with yt_dlp.YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(url, download=False)
@@ -568,7 +572,14 @@ def inspect_video(url: str, cookies_path: str | None = None) -> dict[str, Any]:
             last_err = e
             if is_permanent_error(e):
                 raise PermanentMediaError(f"Permanent media error: {e}") from e
-            time.sleep(config.processing.retry_delay_seconds * (attempt + 1))
+            delay = config.processing.retry_delay_seconds * (attempt + 1)
+            end_time = time.time() + delay
+            while time.time() < end_time:
+                if is_cancelled and is_cancelled():
+                    raise DownloadCancelled("Task was cancelled by user")
+                time.sleep(min(0.5, max(0.01, end_time - time.time())))
+            if is_cancelled and is_cancelled():
+                raise DownloadCancelled("Task was cancelled by user")
     else:
         raise RuntimeError(f"Failed to inspect video after {config.processing.max_retries} attempts: {last_err}")
 
@@ -759,7 +770,10 @@ def download_media_bundle(
     if progress_hook:
         progress_hook({'phase': 'inspecting', 'message': 'Extracting tags, transcript, and video metadata...'})
 
-    info = inspect_video(url, cookies_path)
+    try:
+        info = inspect_video(url, cookies_path, is_cancelled=is_cancelled)
+    except TypeError:
+        info = inspect_video(url, cookies_path)
     if is_cancelled and is_cancelled():
         clean_leftover_partial_files(target_dir, extract_video_id(url) or "")
         raise DownloadCancelled("Task was cancelled by user")

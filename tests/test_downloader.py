@@ -328,3 +328,56 @@ def test_inspect_video_retries_transient_error(monkeypatch):
 
     # Should have retried max_retries times
     assert attempts == config.processing.max_retries
+
+
+def test_inspect_video_cancel_during_retry_sleep(monkeypatch):
+    """Verify that a cancellation signal aborts retry backoff sleep immediately."""
+    import threading
+    import time
+
+    import pytest
+    import yt_dlp
+
+    from config import config
+    from downloader import DownloadCancelled, inspect_video
+
+    class FailYoutubeDL:
+        def __init__(self, opts):
+            self.opts = opts
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            pass
+
+        def extract_info(self, url, download=False):
+            raise yt_dlp.utils.DownloadError("Temporary network glitch")
+
+    monkeypatch.setattr(yt_dlp, "YoutubeDL", FailYoutubeDL)
+    monkeypatch.setattr(config.processing, "retry_delay_seconds", 10.0)
+
+    cancelled = False
+
+    def is_cancelled():
+        return cancelled
+
+    start_time = time.time()
+
+    # Cancel after a brief moment (e.g., 0.1s)
+    def trigger_cancel():
+        nonlocal cancelled
+        time.sleep(0.1)
+        cancelled = True
+
+    t = threading.Thread(target=trigger_cancel)
+    t.start()
+
+    with pytest.raises(DownloadCancelled, match="Task was cancelled by user"):
+        inspect_video("https://www.youtube.com/watch?v=busy123", is_cancelled=is_cancelled)
+
+    t.join()
+    duration = time.time() - start_time
+    # It must break out much faster than the full 10.0s delay
+    assert duration < 2.0
+
