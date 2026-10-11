@@ -61,12 +61,16 @@ def test_audacity_resolver_platform_branches(monkeypatch):
 
 
 def test_auto_update_ytdlp_if_enabled(monkeypatch):
+    import subprocess
+
     import main
 
     called_cmds = []
+    run_kwargs = {}
 
-    def mock_run(cmd, check=True):
+    def mock_run(cmd, check=True, timeout=None):
         called_cmds.append(cmd)
+        run_kwargs["timeout"] = timeout
 
     monkeypatch.setattr("subprocess.run", mock_run)
 
@@ -80,3 +84,14 @@ def test_auto_update_ytdlp_if_enabled(monkeypatch):
     main.auto_update_ytdlp_if_enabled()
     assert len(called_cmds) == 1
     assert "yt-dlp" in called_cmds[0]
+    assert "--no-input" in called_cmds[0]
+    assert "--disable-pip-version-check" in called_cmds[0]
+    assert run_kwargs.get("timeout") == 120
+
+    # When subprocess times out
+    def mock_run_timeout(cmd, check=True, timeout=None):
+        raise subprocess.TimeoutExpired(cmd=cmd, timeout=timeout)
+
+    monkeypatch.setattr("subprocess.run", mock_run_timeout)
+    # Must catch gracefully without raising
+    main.auto_update_ytdlp_if_enabled()

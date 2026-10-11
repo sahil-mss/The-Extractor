@@ -17,9 +17,21 @@ def auto_update_ytdlp_if_enabled():
     if os.environ.get("EXTRACTOR_AUTO_UPDATE_YTDLP") in ("1", "true", "True"):
         print("  🔄 Checking/updating yt-dlp (EXTRACTOR_AUTO_UPDATE_YTDLP enabled)...")
         try:
-            cmd = [sys.executable, "-m", "pip", "install", "--user", "-U", "yt-dlp"]
-            subprocess.run(cmd, check=True)
+            cmd = [
+                sys.executable,
+                "-m",
+                "pip",
+                "install",
+                "--user",
+                "-U",
+                "--disable-pip-version-check",
+                "--no-input",
+                "yt-dlp",
+            ]
+            subprocess.run(cmd, check=True, timeout=120)
             print("  ✅ yt-dlp updated successfully.")
+        except subprocess.TimeoutExpired:
+            print("  ⚠️ Warning: yt-dlp update timed out after 120 seconds", file=sys.stderr)
         except Exception as e:
             print(f"  ⚠️ Warning: Failed to update yt-dlp: {e}", file=sys.stderr)
 
