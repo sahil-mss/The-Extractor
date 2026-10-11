@@ -380,6 +380,49 @@ def test_task_cleanup_worker_logs_warning(monkeypatch):
     assert any(msg == "task cleanup failed" and exc is True for msg, exc in warning_logged)
 
 
+def test_record_task_completed_failure_logged(monkeypatch):
+    import database
+    import downloader
+    import server
+
+    errors_logged = []
+
+    def mock_error(msg, exc_info=False):
+        errors_logged.append((msg, exc_info))
+
+    monkeypatch.setattr(server.logger, "error", mock_error)
+
+    # Simulate database.record_task_completed failure
+    def mock_record_fail(**kwargs):
+        raise RuntimeError("Disk I/O failure on commit")
+
+    monkeypatch.setattr(database, "record_task_completed", mock_record_fail)
+
+    task_id = "test-db-fail-task"
+    req = server.DownloadRequest(url="https://www.youtube.com/watch?v=dbfailvid")
+    with server.TASKS_LOCK:
+        server.TASKS[task_id] = {
+            "task_id": task_id,
+            "url": req.url,
+            "status": "running",
+            "message": "Processing...",
+        }
+
+    fake_results = {"info": {"id": "dbfailvid", "title": "DB Fail Vid"}, "video_file": None}
+    monkeypatch.setattr(downloader, "download_media_bundle", lambda **kwargs: fake_results)
+
+    # Execute task runner
+    server.run_download_task(task_id, req)
+
+    with server.TASKS_LOCK:
+        # Task in-memory must still be completed
+        assert server.TASKS[task_id]["status"] == "completed"
+        server.TASKS.clear()
+
+    # Must log error with exc_info=True
+    assert any(msg == "Failed to persist completed task" and exc is True for msg, exc in errors_logged)
+
+
 def test_batch_download_atomic_rollback_on_db_failure(monkeypatch):
     import pytest
 

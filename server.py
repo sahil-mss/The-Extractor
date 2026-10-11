@@ -333,12 +333,25 @@ def run_download_task(task_id: str, req: DownloadRequest):
 
         # Persist to database only if task was still running and completed normally
         if persisted:
-            database.record_task_completed(
-                task_id=task_id,
-                url=req.url,
-                info=results.get("info", {}),
-                results=results,
-            )
+            try:
+                database.record_task_completed(
+                    task_id=task_id,
+                    url=req.url,
+                    info=results.get("info", {}),
+                    results=results,
+                )
+            except Exception:
+                # Retry once in case of transient SQLite busy lock
+                try:
+                    time.sleep(0.5)
+                    database.record_task_completed(
+                        task_id=task_id,
+                        url=req.url,
+                        info=results.get("info", {}),
+                        results=results,
+                    )
+                except Exception:
+                    logger.error("Failed to persist completed task", exc_info=True)
     except Exception as e:
         cancelled = is_cancelled_check() or isinstance(e, downloader.DownloadCancelled)
         persisted = False
