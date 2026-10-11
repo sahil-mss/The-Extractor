@@ -40,6 +40,7 @@ class ProcessingConfig(BaseModel):
     max_playlist_items: int = 500
     max_queue_size: int = 500
     task_retention_minutes: int = 10
+    task_timeout_minutes: int = 60
 
 class StorageConfig(BaseModel):
     max_storage_gb: float = 0.0      # 0.0 means unlimited / no size-based deletion

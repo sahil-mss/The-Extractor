@@ -52,23 +52,47 @@ def verify_api_key(request: Request, x_api_key: str | None = Header(None)):
             raise HTTPException(status_code=401, detail="Invalid or missing X-API-Key header")
     return True
 
-# Background thread to clean up completed/failed tasks from memory after task_retention_minutes
+# Background thread to clean up completed/failed tasks from memory and time out hung tasks
 def task_cleanup_worker():
     while True:
         try:
             time.sleep(60)
             retention_secs = config.processing.task_retention_minutes * 60
+            timeout_secs = config.processing.task_timeout_minutes * 60
             now = time.time()
             expired_ids = []
-            for tid, t in list(TASKS.items()):
-                if t.get("status") in ("completed", "error", "cancelled"):
-                    finished_at = t.get("finished_at")
-                    if finished_at and (now - finished_at) > retention_secs:
-                        expired_ids.append(tid)
+            timed_out_tasks = []
 
-            for tid in expired_ids:
-                TASKS.pop(tid, None)
-                CANCELLED_TASKS.discard(tid)
+            with TASKS_LOCK:
+                for tid, t in list(TASKS.items()):
+                    status = t.get("status")
+                    if status in ("completed", "error", "cancelled"):
+                        finished_at = t.get("finished_at")
+                        if finished_at and (now - finished_at) > retention_secs:
+                            expired_ids.append(tid)
+                    elif status == "running" and timeout_secs > 0:
+                        started_at = t.get("started_at")
+                        if started_at and (now - started_at) > timeout_secs:
+                            t["status"] = "error"
+                            t["message"] = f"Task timed out after {config.processing.task_timeout_minutes} minutes"
+                            t["finished_at"] = now
+                            timed_out_tasks.append((tid, t.get("url", "")))
+
+                for tid in expired_ids:
+                    TASKS.pop(tid, None)
+                    CANCELLED_TASKS.discard(tid)
+
+            for tid, url in timed_out_tasks:
+                try:
+                    database.record_task_completed(
+                        task_id=tid,
+                        url=url,
+                        info={},
+                        results={},
+                        error_message=f"Task timed out after {config.processing.task_timeout_minutes} minutes",
+                    )
+                except Exception as db_err:
+                    logger.debug(f"Failed to record timed out task in DB: {db_err}")
         except Exception as ex:
             logger.debug(f"Task cleanup error: {ex}")
 
@@ -230,6 +254,7 @@ def run_download_task(task_id: str, req: DownloadRequest):
             if task_id in TASKS:
                 TASKS[task_id]["status"] = "running"
                 TASKS[task_id]["message"] = "Processing download..."
+                TASKS[task_id]["started_at"] = time.time()
 
         results = downloader.download_media_bundle(
             url=req.url,

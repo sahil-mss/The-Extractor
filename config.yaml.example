@@ -35,6 +35,7 @@ processing:
   max_playlist_items: 500     # Max videos to expand from a playlist
   max_queue_size: 500         # Maximum pending tasks in queue
   task_retention_minutes: 10  # Automatically purge completed/failed task state from memory after N minutes
+  task_timeout_minutes: 60    # Timeout for long-running / hung downloads before marking error
 
 storage:
   max_storage_gb: 0.0         # Max storage for downloads/ (0.0 for unlimited, e.g. 10.0 for 10GB cap)

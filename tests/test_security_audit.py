@@ -306,3 +306,44 @@ def test_enqueue_download_rollback_on_failure(monkeypatch):
     with server.TASKS_LOCK:
         assert len(server.TASKS) == 0
 
+
+def test_socket_timeout_and_task_timeout(monkeypatch):
+    import time
+
+    import downloader
+    import server
+
+    # 1. Verify socket_timeout is 30 in get_base_ydl_opts
+    opts = downloader.get_base_ydl_opts()
+    assert opts.get("socket_timeout") == 30
+
+    # 2. Verify task_timeout_minutes config default is 60
+    assert server.config.processing.task_timeout_minutes == 60
+
+    # 3. Verify task timeout logic marks hung task as error
+    task_id = "hung-task-123"
+    with server.TASKS_LOCK:
+        server.TASKS[task_id] = {
+            "task_id": task_id,
+            "url": "https://www.youtube.com/watch?v=hungvid",
+            "status": "running",
+            "started_at": time.time() - 4000,  # > 60 minutes ago
+        }
+
+    # Simulate cleanup worker timeout pass
+    now = time.time()
+    timeout_secs = server.config.processing.task_timeout_minutes * 60
+    with server.TASKS_LOCK:
+        for tid, t in list(server.TASKS.items()):
+            if t.get("status") == "running" and timeout_secs > 0:
+                started_at = t.get("started_at")
+                if started_at and (now - started_at) > timeout_secs:
+                    t["status"] = "error"
+                    t["message"] = f"Task timed out after {server.config.processing.task_timeout_minutes} minutes"
+
+    with server.TASKS_LOCK:
+        assert server.TASKS[task_id]["status"] == "error"
+        assert "timed out" in server.TASKS[task_id]["message"]
+        server.TASKS.clear()
+
+

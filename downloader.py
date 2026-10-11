@@ -264,6 +264,7 @@ def get_base_ydl_opts(cookies_path: str | None = None) -> dict[str, Any]:
     opts: dict[str, Any] = {
         'quiet': True,
         'no_warnings': True,
+        'socket_timeout': 30,
         'retries': config.processing.max_retries,
         'fragment_retries': config.processing.max_retries,
     }
