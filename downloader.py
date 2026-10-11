@@ -51,7 +51,10 @@ def check_ytdlp_version() -> dict[str, Any]:
     Returns status info including whether it is outdated.
     """
     current_ver = getattr(yt_dlp, "version", None)
-    installed_ver = getattr(current_ver, "__version__", "unknown") if current_ver else getattr(yt_dlp, "__version__", "unknown")
+    if current_ver:
+        installed_ver = getattr(current_ver, "__version__", "unknown")
+    else:
+        installed_ver = getattr(yt_dlp, "__version__", "unknown")
 
     result = {
         "installed": installed_ver,
@@ -260,6 +263,13 @@ def expand_playlist_urls(playlist_url: str, max_items: int | None = None) -> lis
     Enforces maximum playlist size limit.
     Returns list of dicts: [{'url': ..., 'title': ..., 'id': ...}]
     """
+    if len(playlist_url) > config.security.max_url_length:
+        raise ValueError(f"URL exceeds maximum allowed length of {config.security.max_url_length} characters")
+
+    parsed = urlparse(playlist_url)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        raise ValueError(f"Not a valid URL: {playlist_url}")
+
     limit = max_items if max_items is not None else config.processing.max_playlist_items
     opts = get_base_ydl_opts()
     opts['extract_flat'] = True
@@ -492,11 +502,20 @@ TRANSCRIPT:
 def resolve_video_format_string(resolution: str = "best") -> str:
     """Resolve format selector string based on chosen resolution."""
     if resolution == "1080p":
-        return "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/best[height<=1080]"
+        return (
+            "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/"
+            "bestvideo[height<=1080]+bestaudio/best[height<=1080]"
+        )
     elif resolution == "720p":
-        return "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best[height<=720]"
+        return (
+            "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/"
+            "bestvideo[height<=720]+bestaudio/best[height<=720]"
+        )
     elif resolution == "480p":
-        return "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=480]+bestaudio/best[height<=480]"
+        return (
+            "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/"
+            "bestvideo[height<=480]+bestaudio/best[height<=480]"
+        )
     return "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best"
 
 def download_media_bundle(
@@ -588,7 +607,10 @@ def download_media_bundle(
         bitrate = audio_bitrate if audio_bitrate in ["128", "192", "320"] else "192"
 
         if progress_hook:
-            progress_hook({'phase': 'audio', 'message': f'Extracting standalone Audio to {codec.upper()} ({bitrate}k)...'})
+            progress_hook({
+                'phase': 'audio',
+                'message': f'Extracting standalone Audio to {codec.upper()} ({bitrate}k)...'
+            })
 
         def yt_progress_audio(d):
             if progress_hook and d.get('status') == 'downloading':

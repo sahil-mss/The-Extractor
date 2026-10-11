@@ -152,3 +152,65 @@ def test_url_length_limit():
     res = client.post("/api/inspect", json={"url": huge_url})
     assert res.status_code == 400
     assert "maximum allowed length" in res.json()["detail"]
+
+
+def test_download_endpoint_url_validation():
+    # Non-HTTP/HTTPS schemes must be rejected
+    res = client.post("/api/download", json={"url": "javascript:alert(1)"})
+    assert res.status_code == 400
+    assert "Not a valid HTTP/HTTPS URL" in res.json()["detail"]
+
+    # File URI scheme must be rejected
+    res_file = client.post("/api/download", json={"url": "file:///etc/passwd"})
+    assert res_file.status_code == 400
+    assert "Not a valid HTTP/HTTPS URL" in res_file.json()["detail"]
+
+
+def test_batch_download_url_validation():
+    # Malformed URL in batch list must be rejected
+    urls = [
+        "https://www.youtube.com/watch?v=good111",
+        "file:///etc/shadow",
+    ]
+    res = client.post("/api/batch-download", json={"urls": urls})
+    assert res.status_code == 400
+    assert "Not a valid HTTP/HTTPS URL in batch" in res.json()["detail"]
+
+
+def test_batch_download_atomic_queue_limit(monkeypatch):
+    import server
+
+    # Set temporary small queue size
+    monkeypatch.setattr(config.processing, "max_queue_size", 3)
+    # Fill queue to 2 slots
+    with server.TASKS_LOCK:
+        server.TASKS.clear()
+        server.TASKS["dummy-1"] = {"status": "queued"}
+        server.TASKS["dummy-2"] = {"status": "running"}
+
+    # Attempting to enqueue batch of 2 when only 1 slot left must reject atomically
+    urls = [
+        "https://www.youtube.com/watch?v=v11111",
+        "https://www.youtube.com/watch?v=v22222",
+    ]
+    res = client.post("/api/batch-download", json={"urls": urls})
+    assert res.status_code == 429
+    assert "Queue capacity exceeded" in res.json()["detail"]
+
+    # Clean up dummy tasks
+    with server.TASKS_LOCK:
+        server.TASKS.clear()
+
+
+def test_playlist_inspection_value_error(monkeypatch):
+    import downloader
+
+    def mock_expand(url, max_items=None):
+        raise ValueError("Not a valid URL: invalid-playlist")
+
+    monkeypatch.setattr(downloader, "is_playlist_url", lambda u: True)
+    monkeypatch.setattr(downloader, "expand_playlist_urls", mock_expand)
+
+    res = client.post("/api/inspect", json={"url": "https://www.youtube.com/playlist?list=PL123"})
+    assert res.status_code == 400
+    assert "Not a valid URL" in res.json()["detail"]

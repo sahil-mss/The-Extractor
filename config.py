@@ -164,7 +164,9 @@ def load_config(config_path: str | None = None) -> Config:
     return cfg
 
 def validate_startup_security(cfg: Config) -> None:
-    """Refuse binding to non-localhost (0.0.0.0, ::) if require_api_key_for_non_localhost is True and API key is empty."""
+    """
+    Refuse binding to non-localhost (0.0.0.0, ::) if require_api_key_for_non_localhost is True and API key is empty.
+    """
     is_non_localhost = cfg.app.host in ("0.0.0.0", "::")
     if is_non_localhost and cfg.security.require_api_key_for_non_localhost and not cfg.app.api_key.strip():
         raise RuntimeError(

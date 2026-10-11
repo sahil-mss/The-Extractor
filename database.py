@@ -54,9 +54,13 @@ def record_task_completed(
     url: str,
     info: dict[str, Any],
     results: dict[str, Any],
-    error_message: str | None = None
+    error_message: str | None = None,
+    status_override: str | None = None,
 ) -> None:
-    status = "completed" if not error_message else "error"
+    if status_override:
+        status = status_override
+    else:
+        status = "completed" if not error_message else "error"
     completed_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
     doc_files = results.get("doc_files") or {}
@@ -179,16 +183,30 @@ def get_history_paginated(
         }
 
 def find_download_by_url(url: str) -> dict[str, Any] | None:
-    """Find a completed download record by URL or video_id to detect already-downloaded media."""
+    """Find a completed download record by URL or video_id, ensuring at least one output file still exists on disk."""
     clean_url = url.strip()
     with get_db_connection() as conn:
         cursor = conn.execute("""
             SELECT * FROM extraction_history
             WHERE (url = ? OR video_id = ?) AND status = 'completed'
-            ORDER BY id DESC LIMIT 1
+            ORDER BY id DESC LIMIT 5
         """, (clean_url, clean_url))
-        row = cursor.fetchone()
-        return dict(row) if row else None
+        rows = cursor.fetchall()
+        for row in rows:
+            record = dict(row)
+            # Verify if at least one associated file exists on disk
+            paths = [
+                record.get("video_path"),
+                record.get("audio_path"),
+                record.get("doc_md_path"),
+                record.get("doc_txt_path"),
+            ]
+            if any(p and os.path.exists(p) for p in paths):
+                return record
+            # If no specific path was recorded, still return if record exists
+            if not any(paths):
+                return record
+        return None
 
 def apply_history_retention(
     max_records: int | None = None,
@@ -225,7 +243,11 @@ def apply_history_retention(
 def delete_history_item(item_id: int, delete_files: bool = False) -> bool:
     with get_db_connection() as conn:
         if delete_files:
-            cursor = conn.execute("SELECT video_path, audio_path, doc_md_path, doc_txt_path FROM extraction_history WHERE id = ?", (item_id,))
+            cursor = conn.execute(
+                "SELECT video_path, audio_path, doc_md_path, doc_txt_path "
+                "FROM extraction_history WHERE id = ?",
+                (item_id,)
+            )
             row = cursor.fetchone()
             if row:
                 for col in ["video_path", "audio_path", "doc_md_path", "doc_txt_path"]:
@@ -241,7 +263,10 @@ def delete_history_item(item_id: int, delete_files: bool = False) -> bool:
 def clear_all_history(delete_files: bool = False) -> None:
     with get_db_connection() as conn:
         if delete_files:
-            cursor = conn.execute("SELECT video_path, audio_path, doc_md_path, doc_txt_path FROM extraction_history")
+            cursor = conn.execute(
+                "SELECT video_path, audio_path, doc_md_path, doc_txt_path "
+                "FROM extraction_history"
+            )
             for row in cursor.fetchall():
                 for col in ["video_path", "audio_path", "doc_md_path", "doc_txt_path"]:
                     fpath = row[col]

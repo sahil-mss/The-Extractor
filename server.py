@@ -1,3 +1,4 @@
+import hmac
 import logging
 import os
 import platform
@@ -34,18 +35,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# In-memory live task tracking
+# In-memory live task tracking protected by a reentrant lock
+TASKS_LOCK = threading.RLock()
 TASKS: dict[str, dict[str, Any]] = {}
 CANCELLED_TASKS: set[str] = set()
 executor = ThreadPoolExecutor(max_workers=config.processing.max_concurrent_downloads)
 
 def verify_api_key(request: Request, x_api_key: str | None = Header(None)):
-    """Verify API key if configured, or require it for non-localhost if configured."""
+    """Verify API key if configured, or require it for non-localhost if configured using constant-time comparison."""
     is_non_localhost = config.app.host in ("0.0.0.0", "::")
     must_require = bool(config.app.api_key) or (is_non_localhost and config.security.require_api_key_for_non_localhost)
 
     if must_require:
-        if not x_api_key or x_api_key != config.app.api_key:
+        if not x_api_key or not hmac.compare_digest(x_api_key, config.app.api_key):
             raise HTTPException(status_code=401, detail="Invalid or missing X-API-Key header")
     return True
 
@@ -171,6 +173,8 @@ def api_inspect(req: InspectRequest, authorized: bool = Depends(verify_api_key))
                 "playlist_count": len(items),
                 "items": items,
             }
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
         except Exception as e:
             logger.error(f"Playlist inspection error: {e}", exc_info=True)
             raise HTTPException(status_code=500, detail="Failed to inspect playlist. Check server logs.") from e
@@ -195,22 +199,36 @@ def api_check_downloaded(url: str, authorized: bool = Depends(verify_api_key)):
     return {"already_downloaded": False, "record": None}
 
 def run_download_task(task_id: str, req: DownloadRequest):
-    if task_id in CANCELLED_TASKS:
-        TASKS[task_id]["status"] = "cancelled"
-        TASKS[task_id]["message"] = "Download cancelled"
-        TASKS[task_id]["finished_at"] = time.time()
-        return
+    with TASKS_LOCK:
+        if task_id in CANCELLED_TASKS:
+            if task_id in TASKS:
+                TASKS[task_id]["status"] = "cancelled"
+                TASKS[task_id]["message"] = "Download cancelled"
+                TASKS[task_id]["finished_at"] = time.time()
+            database.record_task_completed(
+                task_id=task_id,
+                url=req.url,
+                info={},
+                results={},
+                error_message="Download cancelled by user",
+                status_override="cancelled",
+            )
+            return
 
     def progress_callback(info: dict):
-        if task_id in TASKS:
-            TASKS[task_id].update(info)
+        with TASKS_LOCK:
+            if task_id in TASKS:
+                TASKS[task_id].update(info)
 
     def is_cancelled_check() -> bool:
-        return task_id in CANCELLED_TASKS
+        with TASKS_LOCK:
+            return task_id in CANCELLED_TASKS
 
     try:
-        TASKS[task_id]["status"] = "running"
-        TASKS[task_id]["message"] = "Processing download..."
+        with TASKS_LOCK:
+            if task_id in TASKS:
+                TASKS[task_id]["status"] = "running"
+                TASKS[task_id]["message"] = "Processing download..."
 
         results = downloader.download_media_bundle(
             url=req.url,
@@ -225,10 +243,12 @@ def run_download_task(task_id: str, req: DownloadRequest):
             is_cancelled=is_cancelled_check,
         )
 
-        TASKS[task_id]["status"] = "completed"
-        TASKS[task_id]["results"] = results
-        TASKS[task_id]["message"] = "Completed successfully!"
-        TASKS[task_id]["finished_at"] = time.time()
+        with TASKS_LOCK:
+            if task_id in TASKS:
+                TASKS[task_id]["status"] = "completed"
+                TASKS[task_id]["results"] = results
+                TASKS[task_id]["message"] = "Completed successfully!"
+                TASKS[task_id]["finished_at"] = time.time()
 
         # Persist to database
         database.record_task_completed(
@@ -238,47 +258,53 @@ def run_download_task(task_id: str, req: DownloadRequest):
             results=results,
         )
     except Exception as e:
-        if is_cancelled_check():
-            TASKS[task_id]["status"] = "cancelled"
-            TASKS[task_id]["message"] = "Task cancelled by user"
-        else:
-            TASKS[task_id]["status"] = "error"
-            TASKS[task_id]["message"] = str(e)
+        cancelled = is_cancelled_check()
+        with TASKS_LOCK:
+            if task_id in TASKS:
+                if cancelled:
+                    TASKS[task_id]["status"] = "cancelled"
+                    TASKS[task_id]["message"] = "Task cancelled by user"
+                else:
+                    TASKS[task_id]["status"] = "error"
+                    TASKS[task_id]["message"] = str(e)
+                TASKS[task_id]["finished_at"] = time.time()
+
+        if not cancelled:
             logger.error(f"Download task {task_id} failed: {e}", exc_info=True)
 
-        TASKS[task_id]["finished_at"] = time.time()
-        # Record in db
+        # Record in db with explicit cancelled status if cancelled
         database.record_task_completed(
             task_id=task_id,
             url=req.url,
             info={},
             results={},
-            error_message=str(e),
+            error_message="Task cancelled by user" if cancelled else str(e),
+            status_override="cancelled" if cancelled else None,
         )
 
 def enqueue_download(req: DownloadRequest) -> str:
-    # Check max queue size limit
-    active_count = sum(1 for t in TASKS.values() if t.get("status") in ("queued", "running"))
-    if active_count >= config.processing.max_queue_size:
-        raise HTTPException(
-            status_code=429,
-            detail=f"Queue limit reached ({config.processing.max_queue_size} tasks). Please wait."
-        )
+    with TASKS_LOCK:
+        active_count = sum(1 for t in TASKS.values() if t.get("status") in ("queued", "running"))
+        if active_count >= config.processing.max_queue_size:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Queue limit reached ({config.processing.max_queue_size} tasks). Please wait."
+            )
 
-    task_id = str(uuid.uuid4())
-    TASKS[task_id] = {
-        "task_id": task_id,
-        "url": req.url,
-        "status": "queued",
-        "phase": "init",
-        "message": "Queued for download...",
-        "percent": "0%",
-        "speed": "",
-        "eta": "",
-        "results": None,
-        "created_at": time.time(),
-        "finished_at": None,
-    }
+        task_id = str(uuid.uuid4())
+        TASKS[task_id] = {
+            "task_id": task_id,
+            "url": req.url,
+            "status": "queued",
+            "phase": "init",
+            "message": "Queued for download...",
+            "percent": "0%",
+            "speed": "",
+            "eta": "",
+            "results": None,
+            "created_at": time.time(),
+            "finished_at": None,
+        }
     database.record_task_created(task_id, req.url)
     executor.submit(run_download_task, task_id, req)
     return task_id
@@ -294,6 +320,10 @@ def api_download(req: DownloadRequest, authorized: bool = Depends(verify_api_key
             status_code=400,
             detail=f"URL exceeds maximum allowed length of {config.security.max_url_length} characters"
         )
+
+    parsed = downloader.urlparse(url)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        raise HTTPException(status_code=400, detail=f"Not a valid HTTP/HTTPS URL: {url}")
 
     task_id = enqueue_download(req)
     return {"status": "started", "task_id": task_id}
@@ -331,11 +361,35 @@ def api_batch_download(req: BatchDownloadRequest, authorized: bool = Depends(ver
         else:
             all_urls.append(u)
 
-    # Re-deduplicate expanded playlist list
+    # Re-deduplicate expanded playlist list and validate length and structure
     final_urls = []
     for u in all_urls:
         if u not in final_urls:
+            if len(u) > config.security.max_url_length:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"URL exceeds maximum allowed length of {config.security.max_url_length} "
+                        f"characters: {u[:50]}..."
+                    )
+                )
+            parsed = downloader.urlparse(u)
+            if parsed.scheme not in ("http", "https") or not parsed.netloc:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Not a valid HTTP/HTTPS URL in batch: {u}"
+                )
             final_urls.append(u)
+
+    # Check total queue capacity atomically under lock before creating any tasks
+    with TASKS_LOCK:
+        active_count = sum(1 for t in TASKS.values() if t.get("status") in ("queued", "running"))
+        if active_count + len(final_urls) > config.processing.max_queue_size:
+            available_slots = max(0, config.processing.max_queue_size - active_count)
+            raise HTTPException(
+                status_code=429,
+                detail=f"Queue capacity exceeded. Available slots: {available_slots}, requested: {len(final_urls)}."
+            )
 
     task_ids = []
     for u in final_urls:
@@ -357,7 +411,8 @@ def api_batch_download(req: BatchDownloadRequest, authorized: bool = Depends(ver
 @app.get("/api/progress")
 def api_bulk_progress(authorized: bool = Depends(verify_api_key)):
     """Return all active tasks and status summary in a single HTTP request."""
-    tasks_list = list(TASKS.values())
+    with TASKS_LOCK:
+        tasks_list = [t.copy() for t in TASKS.values()]
     summary = {
         "total": len(tasks_list),
         "queued": sum(1 for t in tasks_list if t.get("status") == "queued"),
@@ -370,36 +425,55 @@ def api_bulk_progress(authorized: bool = Depends(verify_api_key)):
 
 @app.get("/api/progress/{task_id}")
 def api_progress(task_id: str, authorized: bool = Depends(verify_api_key)):
-    if task_id not in TASKS:
-        raise HTTPException(status_code=404, detail="Task not found")
-    return TASKS[task_id]
+    with TASKS_LOCK:
+        if task_id not in TASKS:
+            raise HTTPException(status_code=404, detail="Task not found")
+        return TASKS[task_id].copy()
 
 # Task cancellation endpoint (EXT-006)
 @app.post("/api/tasks/{task_id}/cancel")
 @app.delete("/api/tasks/{task_id}")
 def api_cancel_task(task_id: str, authorized: bool = Depends(verify_api_key)):
-    if task_id not in TASKS:
-        raise HTTPException(status_code=404, detail="Task not found")
+    with TASKS_LOCK:
+        if task_id not in TASKS:
+            raise HTTPException(status_code=404, detail="Task not found")
 
-    CANCELLED_TASKS.add(task_id)
-    if TASKS[task_id]["status"] == "queued":
-        TASKS[task_id]["status"] = "cancelled"
-        TASKS[task_id]["message"] = "Cancelled before start"
-        TASKS[task_id]["finished_at"] = time.time()
+        CANCELLED_TASKS.add(task_id)
+        if TASKS[task_id]["status"] == "queued":
+            TASKS[task_id]["status"] = "cancelled"
+            TASKS[task_id]["message"] = "Cancelled before start"
+            TASKS[task_id]["finished_at"] = time.time()
+            database.record_task_completed(
+                task_id=task_id,
+                url=TASKS[task_id]["url"],
+                info={},
+                results={},
+                error_message="Cancelled before start",
+                status_override="cancelled",
+            )
     return {"status": "success", "task_id": task_id, "cancelled": True}
 
 @app.post("/api/tasks/cancel-all")
 def api_cancel_all_tasks(authorized: bool = Depends(verify_api_key)):
     count = 0
     now = time.time()
-    for tid, t in TASKS.items():
-        if t.get("status") in ("queued", "running"):
-            CANCELLED_TASKS.add(tid)
-            if t.get("status") == "queued":
-                t["status"] = "cancelled"
-                t["message"] = "Cancelled by user"
-                t["finished_at"] = now
-            count += 1
+    with TASKS_LOCK:
+        for tid, t in TASKS.items():
+            if t.get("status") in ("queued", "running"):
+                CANCELLED_TASKS.add(tid)
+                if t.get("status") == "queued":
+                    t["status"] = "cancelled"
+                    t["message"] = "Cancelled by user"
+                    t["finished_at"] = now
+                    database.record_task_completed(
+                        task_id=tid,
+                        url=t["url"],
+                        info={},
+                        results={},
+                        error_message="Cancelled by user",
+                        status_override="cancelled",
+                    )
+                count += 1
     return {"status": "success", "cancelled_count": count}
 
 # History Endpoints with Pagination & Retention

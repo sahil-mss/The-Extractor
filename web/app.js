@@ -587,7 +587,7 @@ async function loadHistory(searchQuery = null) {
     const data = await res.json();
     const records = data.history || [];
     if (!searchQuery) {
-      historyCountBadge.textContent = records.length;
+      historyCountBadge.textContent = data.total !== undefined ? data.total : records.length;
     }
 
     if (!records.length) {
