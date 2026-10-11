@@ -399,14 +399,16 @@ def api_batch_download(req: BatchDownloadRequest, authorized: bool = Depends(ver
             deduped_urls.append(u)
 
     all_urls = []
+    skipped_urls = []
     # Expand playlists if any
     for u in deduped_urls:
         if downloader.is_playlist_url(u):
             try:
                 playlist_items = downloader.expand_playlist_urls(u, max_items=config.processing.max_playlist_items)
                 all_urls.extend([p["url"] for p in playlist_items])
-            except Exception:
-                all_urls.append(u)
+            except Exception as ex:
+                logger.warning(f"Failed to expand playlist '{u}': {ex}")
+                skipped_urls.append({"url": u, "reason": f"Failed to expand playlist: {ex}"})
         else:
             all_urls.append(u)
 
@@ -482,7 +484,12 @@ def api_batch_download(req: BatchDownloadRequest, authorized: bool = Depends(ver
                 TASKS.pop(tid, None)
         raise
 
-    return {"status": "started", "tasks": task_ids, "total": len(task_ids)}
+    return {
+        "status": "started",
+        "tasks": task_ids,
+        "total": len(task_ids),
+        "skipped": skipped_urls,
+    }
 
 # Bulk progress endpoint (EXT-004)
 @app.get("/api/progress")

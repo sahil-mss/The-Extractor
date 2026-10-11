@@ -381,4 +381,37 @@ def test_batch_download_atomic_rollback_on_db_failure(monkeypatch):
         assert len(server.TASKS) == 0
 
 
+def test_batch_download_playlist_expansion_failure_skipped(monkeypatch):
+    import downloader
+    import server
+
+    # Mock is_playlist_url to recognize test playlist
+    monkeypatch.setattr(downloader, "is_playlist_url", lambda u: "playlist" in u)
+
+    # Mock expand_playlist_urls to raise error
+    def mock_expand(url, max_items=None):
+        raise RuntimeError("Playlist is private or deleted")
+
+    monkeypatch.setattr(downloader, "expand_playlist_urls", mock_expand)
+
+    with server.TASKS_LOCK:
+        server.TASKS.clear()
+
+    urls = [
+        "https://www.youtube.com/playlist?list=PLbroken",
+        "https://www.youtube.com/watch?v=validvideo1",
+    ]
+
+    res = server.api_batch_download(server.BatchDownloadRequest(urls=urls))
+    assert res["status"] == "started"
+    assert res["total"] == 1
+    assert len(res["skipped"]) == 1
+    assert "PLbroken" in res["skipped"][0]["url"]
+    assert "private or deleted" in res["skipped"][0]["reason"]
+
+    with server.TASKS_LOCK:
+        server.TASKS.clear()
+
+
+
 

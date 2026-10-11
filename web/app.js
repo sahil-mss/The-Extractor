@@ -238,6 +238,9 @@ startBatchBtn.addEventListener("click", async () => {
     if (!res.ok) throw new Error(data.detail || "Failed to start batch");
 
     showToast(`Queued ${data.total} item(s)!`);
+    if (data.skipped && data.skipped.length > 0) {
+      showToast(`Warning: ${data.skipped.length} playlist(s) could not be expanded`);
+    }
     batchQueueSection.classList.remove("hidden");
 
     data.tasks.forEach((t) => {
