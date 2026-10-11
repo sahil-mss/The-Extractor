@@ -224,21 +224,25 @@ def api_check_downloaded(url: str, authorized: bool = Depends(verify_api_key)):
     return {"already_downloaded": False, "record": None}
 
 def run_download_task(task_id: str, req: DownloadRequest):
+    already_cancelled = False
     with TASKS_LOCK:
         if task_id in CANCELLED_TASKS:
+            already_cancelled = True
             if task_id in TASKS:
                 TASKS[task_id]["status"] = "cancelled"
                 TASKS[task_id]["message"] = "Download cancelled"
                 TASKS[task_id]["finished_at"] = time.time()
-            database.record_task_completed(
-                task_id=task_id,
-                url=req.url,
-                info={},
-                results={},
-                error_message="Download cancelled by user",
-                status_override="cancelled",
-            )
-            return
+
+    if already_cancelled:
+        database.record_task_completed(
+            task_id=task_id,
+            url=req.url,
+            info={},
+            results={},
+            error_message="Download cancelled by user",
+            status_override="cancelled",
+        )
+        return
 
     def progress_callback(info: dict):
         with TASKS_LOCK:
@@ -518,6 +522,7 @@ def api_progress(task_id: str, authorized: bool = Depends(verify_api_key)):
 @app.post("/api/tasks/{task_id}/cancel")
 @app.delete("/api/tasks/{task_id}")
 def api_cancel_task(task_id: str, authorized: bool = Depends(verify_api_key)):
+    db_record = None
     with TASKS_LOCK:
         if task_id not in TASKS:
             raise HTTPException(status_code=404, detail="Task not found")
@@ -527,20 +532,25 @@ def api_cancel_task(task_id: str, authorized: bool = Depends(verify_api_key)):
             TASKS[task_id]["status"] = "cancelled"
             TASKS[task_id]["message"] = "Cancelled before start"
             TASKS[task_id]["finished_at"] = time.time()
-            database.record_task_completed(
-                task_id=task_id,
-                url=TASKS[task_id]["url"],
-                info={},
-                results={},
-                error_message="Cancelled before start",
-                status_override="cancelled",
-            )
+            db_record = (task_id, TASKS[task_id]["url"])
+
+    if db_record:
+        database.record_task_completed(
+            task_id=db_record[0],
+            url=db_record[1],
+            info={},
+            results={},
+            error_message="Cancelled before start",
+            status_override="cancelled",
+        )
+
     return {"status": "success", "task_id": task_id, "cancelled": True}
 
 @app.post("/api/tasks/cancel-all")
 def api_cancel_all_tasks(authorized: bool = Depends(verify_api_key)):
     count = 0
     now = time.time()
+    db_records = []
     with TASKS_LOCK:
         for tid, t in TASKS.items():
             if t.get("status") in ("queued", "running"):
@@ -549,15 +559,19 @@ def api_cancel_all_tasks(authorized: bool = Depends(verify_api_key)):
                     t["status"] = "cancelled"
                     t["message"] = "Cancelled by user"
                     t["finished_at"] = now
-                    database.record_task_completed(
-                        task_id=tid,
-                        url=t["url"],
-                        info={},
-                        results={},
-                        error_message="Cancelled by user",
-                        status_override="cancelled",
-                    )
+                    db_records.append((tid, t["url"]))
                 count += 1
+
+    for tid, url in db_records:
+        database.record_task_completed(
+            task_id=tid,
+            url=url,
+            info={},
+            results={},
+            error_message="Cancelled by user",
+            status_override="cancelled",
+        )
+
     return {"status": "success", "cancelled_count": count}
 
 # History Endpoints with Pagination & Retention
