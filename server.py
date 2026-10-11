@@ -321,8 +321,15 @@ def enqueue_download(req: DownloadRequest) -> str:
             "created_at": time.time(),
             "finished_at": None,
         }
-    database.record_task_created(task_id, req.url)
-    executor.submit(run_download_task, task_id, req)
+
+    try:
+        database.record_task_created(task_id, req.url)
+        executor.submit(run_download_task, task_id, req)
+    except Exception:
+        with TASKS_LOCK:
+            TASKS.pop(task_id, None)
+        raise
+
     return task_id
 
 @app.post("/api/download")

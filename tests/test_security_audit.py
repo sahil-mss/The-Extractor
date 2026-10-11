@@ -275,3 +275,25 @@ def test_cancel_stops_running_download_and_cleans_partials(tmp_path, monkeypatch
     assert not part_file.exists()
     assert not ytdl_file.exists()
 
+
+def test_enqueue_download_rollback_on_failure(monkeypatch):
+    import pytest
+
+    import database
+    import server
+
+    def mock_record_fail(task_id, url):
+        raise RuntimeError("Simulated DB failure")
+
+    monkeypatch.setattr(database, "record_task_created", mock_record_fail)
+
+    with server.TASKS_LOCK:
+        server.TASKS.clear()
+
+    req = server.DownloadRequest(url="https://www.youtube.com/watch?v=failtest1")
+    with pytest.raises(RuntimeError, match="Simulated DB failure"):
+        server.enqueue_download(req)
+
+    with server.TASKS_LOCK:
+        assert len(server.TASKS) == 0
+
