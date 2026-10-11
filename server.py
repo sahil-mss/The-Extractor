@@ -243,6 +243,22 @@ def run_download_task(task_id: str, req: DownloadRequest):
             is_cancelled=is_cancelled_check,
         )
 
+        if is_cancelled_check():
+            with TASKS_LOCK:
+                if task_id in TASKS:
+                    TASKS[task_id]["status"] = "cancelled"
+                    TASKS[task_id]["message"] = "Download cancelled by user"
+                    TASKS[task_id]["finished_at"] = time.time()
+            database.record_task_completed(
+                task_id=task_id,
+                url=req.url,
+                info={},
+                results={},
+                error_message="Download cancelled by user",
+                status_override="cancelled",
+            )
+            return
+
         with TASKS_LOCK:
             if task_id in TASKS:
                 TASKS[task_id]["status"] = "completed"
@@ -258,7 +274,7 @@ def run_download_task(task_id: str, req: DownloadRequest):
             results=results,
         )
     except Exception as e:
-        cancelled = is_cancelled_check()
+        cancelled = is_cancelled_check() or isinstance(e, downloader.DownloadCancelled)
         with TASKS_LOCK:
             if task_id in TASKS:
                 if cancelled:

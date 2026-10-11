@@ -214,3 +214,64 @@ def test_playlist_inspection_value_error(monkeypatch):
     res = client.post("/api/inspect", json={"url": "https://www.youtube.com/playlist?list=PL123"})
     assert res.status_code == 400
     assert "Not a valid URL" in res.json()["detail"]
+
+
+def test_cancel_stops_running_download_and_cleans_partials(tmp_path, monkeypatch):
+    import time
+
+    import downloader
+    import server
+
+    # Setup mock inspect_video
+    fake_info = {"id": "cancelvid99", "title": "Mid Download Cancel"}
+    monkeypatch.setattr(downloader, "inspect_video", lambda url, cookies=None: fake_info)
+
+    # Create dummy .part and .ytdl files in download dir
+    part_file = tmp_path / "Mid Download Cancel [cancelvid99] [VIDEO].mp4.part"
+    ytdl_file = tmp_path / "Mid Download Cancel [cancelvid99] [VIDEO].mp4.ytdl"
+    part_file.write_text("partial data")
+    ytdl_file.write_text("ytdl state")
+
+    task_id = "test-running-cancel-task"
+
+    class MockYDL:
+        def __init__(self, opts):
+            self.opts = opts
+        def __enter__(self):
+            return self
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            pass
+        def download(self, urls):
+            # Trigger progress hook which will trigger cancellation check
+            hook = self.opts.get("progress_hooks", [None])[0]
+            if hook:
+                # Cancel task right as hook runs
+                with server.TASKS_LOCK:
+                    server.CANCELLED_TASKS.add(task_id)
+                hook({"status": "downloading", "_percent_str": "50.0%"})
+
+    monkeypatch.setattr("yt_dlp.YoutubeDL", MockYDL)
+
+    req = server.DownloadRequest(url="https://www.youtube.com/watch?v=cancelvid99", download_video=True)
+    with server.TASKS_LOCK:
+        server.TASKS[task_id] = {
+            "task_id": task_id,
+            "url": req.url,
+            "status": "queued",
+            "phase": "init",
+            "message": "Queued...",
+            "created_at": time.time(),
+        }
+
+    # Run the task directly
+    monkeypatch.setattr(server.config.paths, "download_dir", str(tmp_path))
+    server.run_download_task(task_id, req)
+
+    # Verify task status is cancelled, not completed
+    with server.TASKS_LOCK:
+        assert server.TASKS[task_id]["status"] == "cancelled"
+
+    # Verify leftover .part and .ytdl files were removed
+    assert not part_file.exists()
+    assert not ytdl_file.exists()
+

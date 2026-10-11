@@ -18,6 +18,26 @@ except ImportError:
 from config import config
 
 
+class DownloadCancelled(Exception):
+    """Raised when a download task has been cancelled by the user."""
+    pass
+
+
+def clean_leftover_partial_files(target_dir: str, vid_id: str) -> None:
+    """Removes leftover *.part and *.ytdl files for the specified video ID."""
+    if not os.path.isdir(target_dir) or not vid_id:
+        return
+    try:
+        for fname in os.listdir(target_dir):
+            if vid_id in fname and (fname.endswith(".part") or fname.endswith(".ytdl")):
+                try:
+                    os.remove(os.path.join(target_dir, fname))
+                except OSError:
+                    pass
+    except Exception:
+        pass
+
+
 def find_ffmpeg_bin() -> str | None:
     """Locate ffmpeg executable across Windows, macOS, and Linux."""
     # 1. System PATH
@@ -559,14 +579,18 @@ def download_media_bundle(
 
     info = inspect_video(url, cookies_path)
     if is_cancelled and is_cancelled():
-        raise RuntimeError("Task was cancelled by user")
+        clean_leftover_partial_files(target_dir, extract_video_id(url) or "")
+        raise DownloadCancelled("Task was cancelled by user")
 
     results['info'] = info
     clean_title = sanitize_filename(info['title'])
     vid_id = info.get('id') or extract_video_id(url) or "video"
 
-
     # Step 2: Generate Metadata Document
+    if is_cancelled and is_cancelled():
+        clean_leftover_partial_files(target_dir, vid_id)
+        raise DownloadCancelled("Task was cancelled by user")
+
     if download_doc:
         if progress_hook:
             progress_hook({'phase': 'document', 'message': 'Generating metadata and transcript document...'})
@@ -574,11 +598,18 @@ def download_media_bundle(
         results['doc_files'] = docs
 
     # Step 3: Download Video (MP4)
+    if is_cancelled and is_cancelled():
+        clean_leftover_partial_files(target_dir, vid_id)
+        raise DownloadCancelled("Task was cancelled by user")
+
     if download_video:
         if progress_hook:
             progress_hook({'phase': 'video', 'message': f'Downloading Video ({video_resolution})...'})
 
         def yt_progress_video(d):
+            if is_cancelled and is_cancelled():
+                clean_leftover_partial_files(target_dir, vid_id)
+                raise DownloadCancelled("Task was cancelled by user")
             if progress_hook and d.get('status') == 'downloading':
                 progress_hook({
                     'phase': 'video_downloading',
@@ -597,11 +628,19 @@ def download_media_bundle(
             'progress_hooks': [yt_progress_video],
         })
 
-        with yt_dlp.YoutubeDL(video_opts) as ydl:
-            ydl.download([url])
-            results['video_file'] = os.path.join(target_dir, f"{clean_title} [{vid_id}] [VIDEO].mp4")
+        try:
+            with yt_dlp.YoutubeDL(video_opts) as ydl:
+                ydl.download([url])
+                results['video_file'] = os.path.join(target_dir, f"{clean_title} [{vid_id}] [VIDEO].mp4")
+        except DownloadCancelled:
+            clean_leftover_partial_files(target_dir, vid_id)
+            raise
 
     # Step 4: Download Audio
+    if is_cancelled and is_cancelled():
+        clean_leftover_partial_files(target_dir, vid_id)
+        raise DownloadCancelled("Task was cancelled by user")
+
     if download_audio:
         codec = audio_format.lower() if audio_format.lower() in ["mp3", "wav", "m4a"] else "mp3"
         bitrate = audio_bitrate if audio_bitrate in ["128", "192", "320"] else "192"
@@ -613,6 +652,9 @@ def download_media_bundle(
             })
 
         def yt_progress_audio(d):
+            if is_cancelled and is_cancelled():
+                clean_leftover_partial_files(target_dir, vid_id)
+                raise DownloadCancelled("Task was cancelled by user")
             if progress_hook and d.get('status') == 'downloading':
                 progress_hook({
                     'phase': 'audio_downloading',
@@ -634,14 +676,23 @@ def download_media_bundle(
             }],
         })
 
-        with yt_dlp.YoutubeDL(audio_opts) as ydl:
-            ydl.download([url])
-            results['audio_file'] = os.path.join(target_dir, f"{clean_title} [{vid_id}] [AUDIO].{codec}")
+        try:
+            with yt_dlp.YoutubeDL(audio_opts) as ydl:
+                ydl.download([url])
+                results['audio_file'] = os.path.join(target_dir, f"{clean_title} [{vid_id}] [AUDIO].{codec}")
+        except DownloadCancelled:
+            clean_leftover_partial_files(target_dir, vid_id)
+            raise
+
+    if is_cancelled and is_cancelled():
+        clean_leftover_partial_files(target_dir, vid_id)
+        raise DownloadCancelled("Task was cancelled by user")
 
     if progress_hook:
         progress_hook({'phase': 'finished', 'message': 'All operations completed successfully!'})
 
     return results
+
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
