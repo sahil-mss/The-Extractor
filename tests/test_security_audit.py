@@ -33,12 +33,34 @@ def test_startup_security_validation():
     good_cfg.app.api_key = "secret"
     validate_startup_security(good_cfg)
 
-    # 3. Localhost (127.0.0.1, localhost, ::1) without API key must succeed
+    # 3. Localhost (127.0.0.1, localhost, ::1) without API key in dev mode must succeed
     for host in ("127.0.0.1", "localhost", "::1"):
         local_cfg = Config()
         local_cfg.app.host = host
         local_cfg.app.api_key = ""
+        local_cfg.app.env = "development"
         validate_startup_security(local_cfg)
+
+    # 4. Production mode without API key must fail even on localhost (SEC-02)
+    prod_no_key = Config()
+    prod_no_key.app.env = "production"
+    prod_no_key.app.api_key = ""
+    with pytest.raises(RuntimeError, match="Production mode.*requires an API key"):
+        validate_startup_security(prod_no_key)
+
+    # 5. Production mode with short/weak API key (< 16 chars) must fail (SEC-02)
+    prod_weak_key = Config()
+    prod_weak_key.app.env = "production"
+    prod_weak_key.app.api_key = "shortkey123"
+    with pytest.raises(RuntimeError, match="at least 16 characters"):
+        validate_startup_security(prod_weak_key)
+
+    # 6. Production mode with strong API key (>= 16 chars) must succeed
+    prod_strong = Config()
+    prod_strong.app.env = "production"
+    prod_strong.app.api_key = "a_very_strong_production_key_123456"
+    validate_startup_security(prod_strong)
+
 
 def test_batch_size_limit_rejection():
     # Attempting to submit more than max_batch_size (100) must return 400

@@ -33,11 +33,14 @@ class AppConfig(BaseModel):
     host: str = "127.0.0.1"
     port: int = 8000
     api_key: str = ""
+    env: str = "development"
     cors_origins: list[str] = Field(default_factory=lambda: ["http://127.0.0.1:8000", "http://localhost:8000"])
 
 class SecurityConfig(BaseModel):
     require_api_key_for_non_localhost: bool = True
     max_url_length: int = 2048
+    min_api_key_length: int = 16
+
 
 class PathsConfig(BaseModel):
     download_dir: str = "downloads"
@@ -185,6 +188,8 @@ def load_config(config_path: str | None = None) -> Config:
             data.setdefault("app", {})["port"] = int(os.environ["EXTRACTOR_PORT"])
         except ValueError:
             pass
+    if "EXTRACTOR_ENV" in os.environ:
+        data.setdefault("app", {})["env"] = os.environ["EXTRACTOR_ENV"].strip().lower()
 
     cfg = Config(**data)
     os.makedirs(cfg.absolute_download_dir, exist_ok=True)
@@ -209,13 +214,38 @@ def is_non_localhost(host: str) -> bool:
 
 def validate_startup_security(cfg: Config) -> None:
     """
-    Refuse binding to non-localhost if require_api_key_for_non_localhost is True and API key is empty.
+    Validates network binding, API key requirements, and production security rules (SEC-02).
+    - Refuses binding to non-localhost without an API key.
+    - In production mode (app.env == 'production'), requires an API key for all bindings
+      and enforces a minimum key strength (min_api_key_length).
     """
-    if is_non_localhost(cfg.app.host) and cfg.security.require_api_key_for_non_localhost and not cfg.app.api_key.strip():
-        raise RuntimeError(
-            f"Security Error: Cannot bind to '{cfg.app.host}' without an API key configured. "
-            "Set 'app.api_key' in config.yaml / EXTRACTOR_API_KEY env var, or bind to '127.0.0.1'."
-        )
+    is_prod = (cfg.app.env or "").strip().lower() == "production"
+    key = cfg.app.api_key.strip()
+    min_len = cfg.security.min_api_key_length
+
+    # Production mode requirements
+    if is_prod:
+        if not key:
+            raise RuntimeError(
+                "Security Error: Production mode (EXTRACTOR_ENV=production) requires an API key to be set."
+            )
+        if len(key) < min_len:
+            raise RuntimeError(
+                f"Security Error: Production mode requires an API key of at least {min_len} characters."
+            )
+
+    # Non-localhost binding requirements
+    if is_non_localhost(cfg.app.host) and cfg.security.require_api_key_for_non_localhost:
+        if not key:
+            raise RuntimeError(
+                f"Security Error: Cannot bind to '{cfg.app.host}' without an API key configured. "
+                "Set 'app.api_key' in config.yaml / EXTRACTOR_API_KEY env var, or bind to '127.0.0.1'."
+            )
+        if is_prod and len(key) < min_len:
+            raise RuntimeError(
+                f"Security Error: Non-localhost production binding requires an API key of at least {min_len} characters."
+            )
+
 
 
 # Global singleton
