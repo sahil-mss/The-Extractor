@@ -10,7 +10,7 @@ from server import app
 client = TestClient(app)
 
 def test_startup_security_validation():
-    # 1. Non-localhost (0.0.0.0) without API key must raise RuntimeError
+    # 1. Non-localhost (0.0.0.0 and LAN IP) without API key must raise RuntimeError
     bad_cfg = Config()
     bad_cfg.app.host = "0.0.0.0"
     bad_cfg.app.api_key = ""
@@ -19,17 +19,26 @@ def test_startup_security_validation():
     with pytest.raises(RuntimeError, match="Cannot bind to '0.0.0.0' without an API key configured"):
         validate_startup_security(bad_cfg)
 
+    lan_cfg = Config()
+    lan_cfg.app.host = "192.168.1.50"
+    lan_cfg.app.api_key = ""
+    lan_cfg.security.require_api_key_for_non_localhost = True
+
+    with pytest.raises(RuntimeError, match="Cannot bind to '192.168.1.50' without an API key configured"):
+        validate_startup_security(lan_cfg)
+
     # 2. Non-localhost with API key must succeed
     good_cfg = Config()
-    good_cfg.app.host = "0.0.0.0"
+    good_cfg.app.host = "192.168.1.50"
     good_cfg.app.api_key = "secret"
     validate_startup_security(good_cfg)
 
-    # 3. Localhost (127.0.0.1) without API key must succeed
-    local_cfg = Config()
-    local_cfg.app.host = "127.0.0.1"
-    local_cfg.app.api_key = ""
-    validate_startup_security(local_cfg)
+    # 3. Localhost (127.0.0.1, localhost, ::1) without API key must succeed
+    for host in ("127.0.0.1", "localhost", "::1"):
+        local_cfg = Config()
+        local_cfg.app.host = host
+        local_cfg.app.api_key = ""
+        validate_startup_security(local_cfg)
 
 def test_batch_size_limit_rejection():
     # Attempting to submit more than max_batch_size (100) must return 400

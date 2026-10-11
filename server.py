@@ -17,7 +17,7 @@ from pydantic import BaseModel
 
 import database
 import downloader
-from config import config, validate_startup_security
+from config import config, is_non_localhost, validate_startup_security
 
 logger = logging.getLogger("the_extractor")
 
@@ -43,8 +43,9 @@ executor = ThreadPoolExecutor(max_workers=config.processing.max_concurrent_downl
 
 def verify_api_key(request: Request, x_api_key: str | None = Header(None)):
     """Verify API key if configured, or require it for non-localhost if configured using constant-time comparison."""
-    is_non_localhost = config.app.host in ("0.0.0.0", "::")
-    must_require = bool(config.app.api_key) or (is_non_localhost and config.security.require_api_key_for_non_localhost)
+    must_require = bool(config.app.api_key) or (
+        is_non_localhost(config.app.host) and config.security.require_api_key_for_non_localhost
+    )
 
     if must_require:
         if not x_api_key or not hmac.compare_digest(x_api_key, config.app.api_key):

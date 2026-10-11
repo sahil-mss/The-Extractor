@@ -163,16 +163,24 @@ def load_config(config_path: str | None = None) -> Config:
     os.makedirs(cfg.absolute_data_dir, exist_ok=True)
     return cfg
 
+LOOPBACK = {"127.0.0.1", "localhost", "::1"}
+
+
+def is_non_localhost(host: str) -> bool:
+    """Returns True if the host is not a standard loopback address."""
+    return host.strip().lower() not in LOOPBACK
+
+
 def validate_startup_security(cfg: Config) -> None:
     """
-    Refuse binding to non-localhost (0.0.0.0, ::) if require_api_key_for_non_localhost is True and API key is empty.
+    Refuse binding to non-localhost if require_api_key_for_non_localhost is True and API key is empty.
     """
-    is_non_localhost = cfg.app.host in ("0.0.0.0", "::")
-    if is_non_localhost and cfg.security.require_api_key_for_non_localhost and not cfg.app.api_key.strip():
+    if is_non_localhost(cfg.app.host) and cfg.security.require_api_key_for_non_localhost and not cfg.app.api_key.strip():
         raise RuntimeError(
             f"Security Error: Cannot bind to '{cfg.app.host}' without an API key configured. "
             "Set 'app.api_key' in config.yaml / EXTRACTOR_API_KEY env var, or bind to '127.0.0.1'."
         )
+
 
 # Global singleton
 config = load_config()
