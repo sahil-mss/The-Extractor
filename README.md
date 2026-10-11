@@ -107,10 +107,10 @@ docker compose up -d
 Access the dashboard at `http://localhost:8000`. All downloaded files persist in `./downloads` and database records persist in `./data`.
 
 > [!NOTE]
-> **Linux Host Permissions:** The compose service runs with `user: "${UID:-1000}:${GID:-1000}"`. In bash, `$UID` is a shell variable rather than an exported environment variable. Before starting, export your UID/GID into a `.env` file and create the directories:
+> **Linux Host Permissions:** The compose service runs with `user: "${UID:-1000}:${GID:-1000}"`. In bash, `$UID` is a shell variable rather than an exported environment variable. Before starting, export your UID/GID into a `.env` file and create the directories owned by your current user:
 > ```bash
 > echo "UID=$(id -u)" >> .env && echo "GID=$(id -g)" >> .env
-> mkdir -p downloads data && sudo chown -R 1000:1000 downloads data
+> mkdir -p downloads data && sudo chown -R "$(id -u):$(id -g)" downloads data
 > ```
 
 > [!TIP]
@@ -258,7 +258,9 @@ app:
   host: "127.0.0.1"          # Set to "0.0.0.0" for Docker or LAN hosting
   port: 8000
   api_key: ""                 # Set a secret key to secure your API
-  cors_origins: ["*"]
+  cors_origins:
+    - "http://127.0.0.1:8000"
+    - "http://localhost:8000"
 
 paths:
   download_dir: "downloads"   # Custom downloads path

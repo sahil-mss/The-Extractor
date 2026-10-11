@@ -558,22 +558,28 @@ def api_batch_download(req: BatchDownloadRequest, authorized: bool = Depends(ver
 
     # Perform atomic DB write and executor submits outside lock, rolling back on failure
     task_ids = []
+    submitted_futures = []
     created_pairs = [(tid, sub_req.url) for tid, sub_req in created_tasks]
     try:
         database.record_batch_tasks_created(created_pairs)
         for tid, sub_req in created_tasks:
-            executor.submit(run_download_task, tid, sub_req)
+            future = executor.submit(run_download_task, tid, sub_req)
+            submitted_futures.append((tid, future))
             task_ids.append({"task_id": tid, "url": sub_req.url})
     except Exception:
-        # Roll back unsubmitted batch tasks from both DB and memory
+        # Cancel any already-submitted futures if they haven't started yet
         all_tids = [tid for tid, _ in created_tasks]
+        with TASKS_LOCK:
+            for tid, future in submitted_futures:
+                future.cancel()
+                CANCELLED_TASKS.add(tid)
+            for tid in all_tids:
+                TASKS.pop(tid, None)
+
         try:
             database.rollback_batch_tasks(all_tids)
         except Exception:
             logger.warning("Failed to rollback batch tasks in DB", exc_info=True)
-        with TASKS_LOCK:
-            for tid in all_tids:
-                TASKS.pop(tid, None)
         raise
 
 
