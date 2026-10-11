@@ -59,7 +59,7 @@ class DefaultsConfig(BaseModel):
 class ProcessingConfig(BaseModel):
     max_retries: int = 3
     retry_delay_seconds: int = 2
-    max_concurrent_downloads: int = 2
+    max_concurrent_downloads: int = 3
     max_batch_size: int = 100
     max_playlist_items: int = 500
     max_queue_size: int = 500

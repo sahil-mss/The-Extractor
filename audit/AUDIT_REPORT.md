@@ -4,7 +4,7 @@
 **Repository:** [sahil-mss/The-Extractor](https://github.com/sahil-mss/The-Extractor)  
 **Base Commit:** `9cc497ba7c62b6b8f48b16b5d1a82fee9f693f85`  
 **Auditor:** Senior Software & Security Engineering Review  
-**Status:** **READY** (Fully Verified, Hardened, 40/40 Passing Regression & Security Tests)
+**Status:** **READY & HARDENED** (Fully Remediated, 59/59 Passing Regression & Security Tests)
 
 ---
 
@@ -40,41 +40,47 @@ All audit findings were strictly classified by evidence (Confirmed / Likely / Po
 
 | ID | Title | Severity | Category | Status |
 |---|---|---|---|---|
-| **SEC-01** | Non-constant time API key comparison vulnerable to timing side-channels | Medium | Security | **Fixed** |
-| **SEC-02** | Incomplete URL scheme validation on download and batch endpoints | High | Security | **Fixed** |
+| **SEC-01** | Arbitrary URL fetching / SSRF risk beyond YouTube domain scope | High | Security | **Fixed** |
+| **SEC-02** | Configuration-dependent API key enforcement / non-localhost exposure | High | Security | **Fixed** |
+| **SEC-03** | Path traversal boundary defense on file deletion and launching | Medium | Security | **Fixed** |
+| **BUG-01** | Task timeout handling and cooperative cancellation across downloader | High | Reliability | **Fixed** |
+| **BUG-02** | Single-download frontend poller missing terminal states (`cancelled`, `interrupted`) | Medium | Reliability / UI | **Fixed** |
+| **BUG-03** | In-memory task state desynchronization with SQLite on batch errors & restarts | High | Reliability | **Fixed** |
+| **BUG-04** | Request model format allowlists and parameter upper bound enforcement | Medium | Validation | **Fixed** |
 | **CONC-01** | Unsynchronised multi-threaded access to global `TASKS` dictionary | High | Reliability | **Fixed** |
 | **CONC-02** | Non-atomic batch ingestion allowing queue limit bypass / task leakage | High | Reliability | **Fixed** |
 | **DATA-01** | Cancelled task status recorded as generic 'error' in SQLite | Low | Data Integrity | **Fixed** |
 | **DATA-02** | Phantom "already downloaded" matches for deleted files | Medium | Reliability | **Fixed** |
 | **PERF-01** | Synchronous upstream PyPI version check introduces latency under load | Medium | Performance | **Mitigated / Documented** |
 | **UI-01** | History badge counter mismatching paginated results | Low | UI/UX | **Fixed** |
+| **DOC-01** | Version label synchronization across frontend and backend | Low | Documentation | **Fixed** |
 
 ---
 
 ## 4. Fixes Implemented
 
-### 4.1 Security Hardening (`server.py`)
-- **Constant-Time Auth Verification:** Replaced standard equality comparison `api_key == expected_api_key` with `secrets.compare_digest(api_key, expected_api_key)` inside [server.py](file:///d:/Projects/The%20Extractor/server.py#L70-L85).
-- **Comprehensive URL Scheme Enforcement:** Added upfront validation on `api_download` and `api_batch_download` ensuring only `http://` or `https://` URLs are accepted. Invalid schemes (e.g., `file://`, `ftp://`, or malformed URI fragments) are rejected immediately with HTTP 400.
-- **Strict Host Binding Checks:** Validated startup safety rule in `validate_startup_security(host, api_key)` preventing external network exposure (`0.0.0.0`) without a configured `API_KEY`.
+### 4.1 Security Hardening (`server.py`, `downloader.py`, `config.py`)
+- **Strict YouTube URL Domain & SSRF Defense (SEC-01):** Implemented centralized `is_valid_youtube_url(url)` validator enforcing strict YouTube domain allowlists (`youtube.com`, `youtu.be`, `m.youtube.com`, etc.), explicitly rejecting IP literals, loopback destinations (`localhost`, `127.0.0.1`), link-local metadata endpoints (`169.254.169.254`), and private subnets across inspection, single download, batch download, and playlist expansion.
+- **Constant-Time Auth Verification & Non-Local Enforcement (SEC-02):** Replaced standard equality comparison with `hmac.compare_digest(x_api_key.encode('utf-8'), config.app.api_key.encode('utf-8'))`. Enforced `validate_startup_security` requiring API key on all non-loopback bindings and production mode with minimum key length (16+ chars).
+- **Filesystem Traversal Boundary Defense (SEC-03):** Enforced `is_safe_download_path(file_path)` inside [database.py](file:///d:/Projects/The%20Extractor/database.py) using `os.path.realpath` and `os.path.commonpath`, strictly confining all file deletions and external application opening to `config.absolute_download_dir`.
+- **Comprehensive HTTP Security Headers:** Enforced `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, and `Referrer-Policy: no-referrer` via FastAPI middleware.
 
-### 4.2 Thread-Safe Queue & Concurrency Management (`server.py`)
+### 4.2 Reliability & Lifecycle Management (`server.py`, `database.py`, `downloader.py`)
+- **Cooperative Cancellation & Task Timeout (BUG-01):** Integrated `is_cancelled` check throughout all stages of `download_media_bundle`. In the background `task_cleanup_worker()`, timed-out tasks are added to `CANCELLED_TASKS`, interrupting the active worker, cleaning partial `.part` / `.ytdl` files, and persisting status without thread race conditions.
+- **Frontend Terminal States & Action Confirmation (BUG-02):** In [web/app.js](file:///d:/Projects/The%20Extractor/web/app.js), expanded single-download and batch polling to handle `completed`, `cancelled`, `error`, and `interrupted` terminal states. Enforced `res.ok` checks on cancellation requests before mutating local UI state.
+- **Transactional Batch Ingestion & Restart Reconciliation (BUG-03):** Implemented `record_batch_tasks_created()` and `rollback_batch_tasks()` to atomically persist batch jobs to SQLite. Added startup query in `init_db()` transitioning any interrupted `queued` or `running` tasks to `interrupted`.
+- **Strict Input Schema Validation (BUG-04):** Added Pydantic field validators for `video_resolution` (`best`, `1080p`, `720p`, `480p`), `audio_format` (`mp3`, `wav`, `m4a`), and `audio_bitrate` (`128`, `192`, `320`). Enforced at least one enabled output format and bounded pagination queries.
+- **Version Label Synchronization (DOC-01):** Synchronized all references in `web/index.html`, `web/app.js`, and `web/styles.css` to version `2.6.0`.
+
+### 4.3 Thread-Safe Queue & Concurrency Management (`server.py`)
 - **Reentrant Mutex Lock:** Introduced `TASKS_LOCK = threading.RLock()` in [server.py](file:///d:/Projects/The%20Extractor/server.py). All reads and writes to `TASKS`, `CANCELLED_TASKS`, active queue counting, and task state updates now acquire `TASKS_LOCK`.
-- **Atomic Batch Backpressure:** In `api_batch_download`, the available capacity is evaluated under `TASKS_LOCK`:
-  ```python
-  with TASKS_LOCK:
-      active_tasks = sum(1 for t in TASKS.values() if t.get("status") in ("queued", "downloading", "processing"))
-      if active_tasks + len(req.urls) > config.MAX_QUEUED_TASKS:
-          raise HTTPException(status_code=429, detail=f"Batch would exceed maximum queue capacity...")
-      # Task creation happens atomically before lock release
-  ```
-  This eliminates race conditions where simultaneous submissions bypass the queue ceiling.
+- **Atomic Batch Backpressure:** In `api_batch_download`, available capacity is evaluated and allocated under `TASKS_LOCK` to eliminate race conditions where simultaneous submissions bypass queue ceilings.
 
-### 4.3 Persistence & File Lifecycle Hardening (`database.py`)
+### 4.4 Persistence & File Lifecycle Hardening (`database.py`)
 - **Status Override Support:** Extended `record_task_completed()` with `status_override="cancelled"` so cancelled tasks explicitly persist with status `'cancelled'`.
 - **Physical Disk Verification:** Updated `find_download_by_url()` to verify that the cached file path still exists on disk using `os.path.exists(row["file_path"])`. If a file was deleted externally, the stale cache entry is ignored, allowing the user to redownload the asset cleanly.
 
-### 4.4 Downloader Input Validation (`downloader.py`)
+### 4.5 Downloader Input Validation & Subprocess Safety (`downloader.py`)
 - **Scheme Validation in Playlist Expansion:** Updated `expand_playlist_urls()` to reject URLs lacking `http://` or `https://` schemes before initializing `yt_dlp.YoutubeDL`.
 - **Subprocess Argument Safety:** Confirmed all FFmpeg and external binary executions employ argument vectors (`list` of strings) rather than raw shell strings (`shell=False`), immune to shell injection.
 
@@ -85,8 +91,9 @@ All audit findings were strictly classified by evidence (Confirmed / Likely / Po
 ### 5.1 Automated Unit & Integration Suite
 Ran full test suite using Pytest 9.1.1:
 ```powershell
-.venv\Scripts\python.exe -m pytest -v
-======================= 40 passed, 2 warnings in 6.56s ========================
+.venv\Scripts\python.exe -m pytest -q
+...........................................................              [100%]
+59 passed, 2 warnings in 4.56s
 ```
 100% of tests passed across API routes, config resolution, database persistence, audio/video extraction, filename deduplication, version comparison, security checks, and concurrency barriers.
 

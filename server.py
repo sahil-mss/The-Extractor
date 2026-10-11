@@ -14,6 +14,7 @@ from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, field_validator, model_validator
 
@@ -41,6 +42,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="The Extractor API", version="2.6.0", lifespan=lifespan)
+
+# Setup GZip compression for faster wire transfers
+app.add_middleware(GZipMiddleware, minimum_size=500)
 
 # Setup CORS
 app.add_middleware(
@@ -129,83 +133,51 @@ cleanup_thread.start()
 class InspectRequest(BaseModel):
     url: str
 
-class DownloadRequest(BaseModel):
+class BaseMediaRequest(BaseModel):
+    download_video: bool = config.defaults.download_video
+    download_audio: bool = config.defaults.download_audio
+    download_doc: bool = config.defaults.download_doc
+    video_resolution: str = config.defaults.video_resolution
+    audio_format: str = config.defaults.audio_format
+    audio_bitrate: str = config.defaults.audio_bitrate
+
+    @field_validator("video_resolution")
+    @classmethod
+    def validate_resolution(cls, v: str) -> str:
+        clean = (v or "").strip().lower()
+        if clean not in VALID_RESOLUTIONS:
+            raise ValueError(f"Invalid video_resolution '{v}'. Allowed: {sorted(VALID_RESOLUTIONS)}")
+        return clean
+
+    @field_validator("audio_format")
+    @classmethod
+    def validate_audio_format(cls, v: str) -> str:
+        clean = (v or "").strip().lower()
+        if clean not in VALID_AUDIO_FORMATS:
+            raise ValueError(f"Invalid audio_format '{v}'. Allowed: {sorted(VALID_AUDIO_FORMATS)}")
+        return clean
+
+    @field_validator("audio_bitrate")
+    @classmethod
+    def validate_audio_bitrate(cls, v: str) -> str:
+        clean = (v or "").strip()
+        if clean not in VALID_AUDIO_BITRATES:
+            raise ValueError(f"Invalid audio_bitrate '{v}'. Allowed: {sorted(VALID_AUDIO_BITRATES)}")
+        return clean
+
+    @model_validator(mode="after")
+    def validate_at_least_one_output(self) -> "BaseMediaRequest":
+        if not (self.download_video or self.download_audio or self.download_doc):
+            raise ValueError("At least one output option (video, audio, or metadata document) must be enabled")
+        return self
+
+
+class DownloadRequest(BaseMediaRequest):
     url: str
-    download_video: bool = config.defaults.download_video
-    download_audio: bool = config.defaults.download_audio
-    download_doc: bool = config.defaults.download_doc
-    video_resolution: str = config.defaults.video_resolution
-    audio_format: str = config.defaults.audio_format
-    audio_bitrate: str = config.defaults.audio_bitrate
 
-    @field_validator("video_resolution")
-    @classmethod
-    def validate_resolution(cls, v: str) -> str:
-        clean = (v or "").strip().lower()
-        if clean not in VALID_RESOLUTIONS:
-            raise ValueError(f"Invalid video_resolution '{v}'. Allowed: {sorted(VALID_RESOLUTIONS)}")
-        return clean
 
-    @field_validator("audio_format")
-    @classmethod
-    def validate_audio_format(cls, v: str) -> str:
-        clean = (v or "").strip().lower()
-        if clean not in VALID_AUDIO_FORMATS:
-            raise ValueError(f"Invalid audio_format '{v}'. Allowed: {sorted(VALID_AUDIO_FORMATS)}")
-        return clean
-
-    @field_validator("audio_bitrate")
-    @classmethod
-    def validate_audio_bitrate(cls, v: str) -> str:
-        clean = (v or "").strip()
-        if clean not in VALID_AUDIO_BITRATES:
-            raise ValueError(f"Invalid audio_bitrate '{v}'. Allowed: {sorted(VALID_AUDIO_BITRATES)}")
-        return clean
-
-    @model_validator(mode="after")
-    def validate_at_least_one_output(self) -> "DownloadRequest":
-        if not (self.download_video or self.download_audio or self.download_doc):
-            raise ValueError("At least one output option (video, audio, or metadata document) must be enabled")
-        return self
-
-class BatchDownloadRequest(BaseModel):
+class BatchDownloadRequest(BaseMediaRequest):
     urls: list[str]
-    download_video: bool = config.defaults.download_video
-    download_audio: bool = config.defaults.download_audio
-    download_doc: bool = config.defaults.download_doc
-    video_resolution: str = config.defaults.video_resolution
-    audio_format: str = config.defaults.audio_format
-    audio_bitrate: str = config.defaults.audio_bitrate
-
-    @field_validator("video_resolution")
-    @classmethod
-    def validate_resolution(cls, v: str) -> str:
-        clean = (v or "").strip().lower()
-        if clean not in VALID_RESOLUTIONS:
-            raise ValueError(f"Invalid video_resolution '{v}'. Allowed: {sorted(VALID_RESOLUTIONS)}")
-        return clean
-
-    @field_validator("audio_format")
-    @classmethod
-    def validate_audio_format(cls, v: str) -> str:
-        clean = (v or "").strip().lower()
-        if clean not in VALID_AUDIO_FORMATS:
-            raise ValueError(f"Invalid audio_format '{v}'. Allowed: {sorted(VALID_AUDIO_FORMATS)}")
-        return clean
-
-    @field_validator("audio_bitrate")
-    @classmethod
-    def validate_audio_bitrate(cls, v: str) -> str:
-        clean = (v or "").strip()
-        if clean not in VALID_AUDIO_BITRATES:
-            raise ValueError(f"Invalid audio_bitrate '{v}'. Allowed: {sorted(VALID_AUDIO_BITRATES)}")
-        return clean
-
-    @model_validator(mode="after")
-    def validate_at_least_one_output(self) -> "BatchDownloadRequest":
-        if not (self.download_video or self.download_audio or self.download_doc):
-            raise ValueError("At least one output option (video, audio, or metadata document) must be enabled")
-        return self
 
 
 class AudacityRequest(BaseModel):
@@ -618,13 +590,32 @@ def api_bulk_progress(authorized: bool = Depends(verify_api_key)):
     """Return all active tasks and status summary in a single HTTP request."""
     with TASKS_LOCK:
         tasks_list = [t.copy() for t in TASKS.values()]
+
+    queued = 0
+    running = 0
+    completed = 0
+    error = 0
+    cancelled = 0
+    for t in tasks_list:
+        st = t.get("status")
+        if st == "queued":
+            queued += 1
+        elif st == "running":
+            running += 1
+        elif st == "completed":
+            completed += 1
+        elif st == "error":
+            error += 1
+        elif st == "cancelled":
+            cancelled += 1
+
     summary = {
         "total": len(tasks_list),
-        "queued": sum(1 for t in tasks_list if t.get("status") == "queued"),
-        "running": sum(1 for t in tasks_list if t.get("status") == "running"),
-        "completed": sum(1 for t in tasks_list if t.get("status") == "completed"),
-        "error": sum(1 for t in tasks_list if t.get("status") == "error"),
-        "cancelled": sum(1 for t in tasks_list if t.get("status") == "cancelled"),
+        "queued": queued,
+        "running": running,
+        "completed": completed,
+        "error": error,
+        "cancelled": cancelled,
     }
     return {"status": "success", "summary": summary, "tasks": tasks_list}
 
@@ -722,12 +713,11 @@ def api_get_history(
     safe_page_size = max(1, min(page_size, 200))
     safe_page = max(1, page)
 
-    # Support both page/page_size and limit/offset for backward compatibility
-    if safe_page > 1 or safe_page_size != 50:
-        paginated = database.get_history_paginated(page=safe_page, page_size=safe_page_size, search=search)
-        return {"status": "success", "history": paginated["items"], **paginated}
+    # Use effective page and page_size for pagination
+    effective_page = safe_page
+    effective_page_size = safe_page_size if (safe_page > 1 or safe_page_size != 50) else safe_limit
 
-    paginated = database.get_history_paginated(page=1, page_size=safe_limit, search=search)
+    paginated = database.get_history_paginated(page=effective_page, page_size=effective_page_size, search=search)
     return {"status": "success", "history": paginated["items"], **paginated}
 
 

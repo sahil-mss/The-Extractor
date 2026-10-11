@@ -224,16 +224,27 @@ def get_storage_stats(directory: str | None = None) -> dict[str, Any]:
     target_dir = os.path.abspath(directory or config.absolute_download_dir)
     os.makedirs(target_dir, exist_ok=True)
 
-    total_bytes = 0
-    file_count = 0
-    for root, _, files in os.walk(target_dir):
-        for f in files:
-            fp = os.path.join(root, f)
-            try:
-                total_bytes += os.path.getsize(fp)
-                file_count += 1
-            except OSError:
-                pass
+    def scan_dir(path: str) -> tuple[int, int]:
+        b = 0
+        c = 0
+        try:
+            with os.scandir(path) as it:
+                for entry in it:
+                    try:
+                        if entry.is_file(follow_symlinks=False):
+                            b += entry.stat().st_size
+                            c += 1
+                        elif entry.is_dir(follow_symlinks=False):
+                            sub_b, sub_c = scan_dir(entry.path)
+                            b += sub_b
+                            c += sub_c
+                    except OSError:
+                        pass
+        except OSError:
+            pass
+        return b, c
+
+    total_bytes, file_count = scan_dir(target_dir)
 
     disk_used_percent = 0.0
     try:
@@ -285,23 +296,30 @@ def perform_storage_cleanup(
     total_bytes = 0
     now = time.time()
 
-    for root, _, files in os.walk(target_dir):
-        for f in files:
-            fp = os.path.join(root, f)
-            ext = os.path.splitext(f)[1].lower()
-            if ext not in allowed_extensions or f == ".gitkeep" or f.endswith(".part") or f.endswith(".ytdl"):
-                continue
+    def collect_entries(path: str):
+        nonlocal total_bytes
+        try:
+            with os.scandir(path) as it:
+                for entry in it:
+                    try:
+                        if entry.is_file(follow_symlinks=False):
+                            name = entry.name
+                            ext = os.path.splitext(name)[1].lower()
+                            if ext not in allowed_extensions or name == ".gitkeep" or name.endswith(".part") or name.endswith(".ytdl"):
+                                continue
+                            st = entry.stat()
+                            if (now - st.st_mtime) < min_age_seconds:
+                                continue
+                            file_entries.append({"path": entry.path, "size": st.st_size, "mtime": st.st_mtime})
+                            total_bytes += st.st_size
+                        elif entry.is_dir(follow_symlinks=False):
+                            collect_entries(entry.path)
+                    except OSError:
+                        pass
+        except OSError:
+            pass
 
-            try:
-                stat = os.stat(fp)
-                # Skip files modified in the last 10 minutes
-                if (now - stat.st_mtime) < min_age_seconds:
-                    continue
-
-                file_entries.append({"path": fp, "size": stat.st_size, "mtime": stat.st_mtime})
-                total_bytes += stat.st_size
-            except OSError:
-                pass
+    collect_entries(target_dir)
 
     # Sort oldest first
     file_entries.sort(key=lambda x: x["mtime"])
@@ -421,6 +439,8 @@ def get_base_ydl_opts(cookies_path: str | None = None) -> dict[str, Any]:
         'socket_timeout': 30,
         'retries': config.processing.max_retries,
         'fragment_retries': config.processing.max_retries,
+        'concurrent_fragment_downloads': 4,
+        'buffersize': 1024 * 64,  # 64 KB buffer for faster throughput
     }
     if ffmpeg_path:
         opts['ffmpeg_location'] = ffmpeg_path
@@ -715,7 +735,8 @@ def download_media_bundle(
         )
 
     if is_cancelled and is_cancelled():
-        raise RuntimeError("Task was cancelled by user")
+        clean_leftover_partial_files(target_dir, extract_video_id(url) or "")
+        raise DownloadCancelled("Task was cancelled by user")
 
     results: dict[str, Any] = {
         'video_file': None,
