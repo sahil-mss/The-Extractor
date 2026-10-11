@@ -1,0 +1,30 @@
+name: yt-dlp Healthcheck
+
+on:
+  schedule:
+    # Run every Monday at 06:00 UTC
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+jobs:
+  check-ytdlp:
+    name: Check yt-dlp extraction against public test video
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Inspect public test video
+        run: |
+          python -c "import yt_dlp; ydl = yt_dlp.YoutubeDL({'quiet': True, 'skip_download': True}); info = ydl.extract_info('https://www.youtube.com/watch?v=jNQXAC9IVRw', download=False); assert info and info.get('title'), 'Extraction failed'"

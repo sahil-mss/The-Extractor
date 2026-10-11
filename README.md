@@ -309,6 +309,22 @@ python downloader.py "https://www.youtube.com/playlist?list=PL..."
 
 ---
 
+## Troubleshooting & yt-dlp Breakage Runbook
+
+### Downloads suddenly failing?
+YouTube frequently changes its internal player APIs, which can temporarily break video or audio extraction.
+If downloads suddenly start failing with extraction errors, upgrade `yt-dlp` to the latest release:
+
+```bash
+pip install -U yt-dlp
+```
+
+The Extractor also automatically checks PyPI every hour to notify you in the settings/status panel whenever your installed `yt-dlp` version becomes outdated.
+
+A weekly automated healthcheck workflow in CI also continuously monitors extraction against public test videos to catch upstream breakages early.
+
+---
+
 ## Testing & Quality Assurance
 
 Run the automated test suite:
