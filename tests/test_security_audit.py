@@ -682,6 +682,48 @@ async def test_lifespan_graceful_shutdown(monkeypatch):
     assert shutdown_called is True
 
 
+def test_batch_executor_submit_failure_rollback(monkeypatch):
+    import server
+
+    original_submit = server.executor.submit
+    submit_count = 0
+    submitted_task_ids = []
+
+    def failing_submit(fn, tid, req):
+        nonlocal submit_count
+        submit_count += 1
+        if submit_count == 2:
+            raise RuntimeError("Simulated thread pool executor failure on 2nd task")
+        submitted_task_ids.append(tid)
+        return original_submit(fn, tid, req)
+
+    monkeypatch.setattr(server.executor, "submit", failing_submit)
+
+    urls = [
+        "https://www.youtube.com/watch?v=batchrb01",
+        "https://www.youtube.com/watch?v=batchrb02",
+        "https://www.youtube.com/watch?v=batchrb03",
+    ]
+
+    # Submit batch and assert that the response/call raises an error
+    with pytest.raises(RuntimeError, match="Simulated thread pool executor failure on 2nd task"):
+        server.api_batch_download(server.BatchDownloadRequest(urls=urls))
+
+    # Verify no queued ghost tasks remain in TASKS
+    with server.TASKS_LOCK:
+        for t in server.TASKS.values():
+            assert t.get("url") not in urls
+
+        # Verify cancel flag was set for tasks that were submitted
+        for tid in submitted_task_ids:
+            assert tid in server.CANCELLED_TASKS
+
+    # Verify database records were rolled back
+    for u in urls:
+        row = database.find_download_by_url(u)
+        assert row is None
+
+
 
 
 
