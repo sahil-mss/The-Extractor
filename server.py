@@ -7,7 +7,9 @@ import subprocess
 import threading
 import time
 import uuid
+from collections.abc import AsyncIterator
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
@@ -24,7 +26,16 @@ logger = logging.getLogger("the_extractor")
 # Validate binding and auth on module startup
 validate_startup_security(config)
 
-app = FastAPI(title="The Extractor API", version="2.5.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    # Startup phase
+    yield
+    # Graceful shutdown: cancel pending futures and don't block process exit
+    executor.shutdown(wait=False, cancel_futures=True)
+
+
+app = FastAPI(title="The Extractor API", version="2.5.0", lifespan=lifespan)
 
 # Setup CORS
 app.add_middleware(

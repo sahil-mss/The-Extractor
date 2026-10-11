@@ -443,6 +443,27 @@ def test_cancel_already_finished_task():
         server.TASKS.pop(task_id, None)
 
 
+@pytest.mark.anyio
+async def test_lifespan_graceful_shutdown(monkeypatch):
+    import server
+
+    shutdown_called = False
+
+    def mock_shutdown(wait=False, cancel_futures=True):
+        nonlocal shutdown_called
+        shutdown_called = True
+        assert wait is False
+        assert cancel_futures is True
+
+    monkeypatch.setattr(server.executor, "shutdown", mock_shutdown)
+
+    async with server.lifespan(server.app):
+        pass
+
+    assert shutdown_called is True
+
+
+
 
 
 
