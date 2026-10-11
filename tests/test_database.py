@@ -43,3 +43,26 @@ def test_db_lifecycle(tmp_path):
     deleted = database.delete_history_item(item_id)
     assert deleted is True
     assert len(database.get_history()) == 0
+
+
+def test_init_db_marks_orphaned_tasks_interrupted(tmp_path):
+    test_db = str(tmp_path / "test_interrupted.db")
+    database.DB_PATH = test_db
+    database.init_db()
+
+    # Create orphaned queued and running tasks
+    database.record_task_created("orphan-1", "https://youtube.com/watch?v=orphan1")
+    database.record_task_created("orphan-2", "https://youtube.com/watch?v=orphan2")
+    with database.get_db_connection() as conn:
+        conn.execute("UPDATE extraction_history SET status = 'running' WHERE task_id = 'orphan-2'")
+
+    # Re-run init_db (simulating app restart)
+    database.init_db()
+
+    history = database.get_history()
+    assert len(history) == 2
+    for h in history:
+        assert h["status"] == "interrupted"
+        assert "interrupted" in h["error_message"].lower()
+        assert h["completed_at"] is not None
+

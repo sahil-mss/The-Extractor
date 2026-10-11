@@ -42,6 +42,15 @@ def init_db():
         conn.execute("CREATE INDEX IF NOT EXISTS idx_history_task_id ON extraction_history(task_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_history_created_at ON extraction_history(id DESC)")
 
+        # Mark any tasks left in 'queued' or 'running' state from previous crash/restart as 'interrupted'
+        conn.execute("""
+            UPDATE extraction_history
+            SET status = 'interrupted',
+                error_message = 'Task interrupted by application shutdown or restart',
+                completed_at = CURRENT_TIMESTAMP
+            WHERE status IN ('queued', 'running')
+        """)
+
 def record_task_created(task_id: str, url: str) -> None:
     with get_db_connection() as conn:
         conn.execute("""
