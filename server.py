@@ -35,7 +35,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     executor.shutdown(wait=False, cancel_futures=True)
 
 
-app = FastAPI(title="The Extractor API", version="2.5.0", lifespan=lifespan)
+app = FastAPI(title="The Extractor API", version="2.6.0", lifespan=lifespan)
 
 # Setup CORS
 app.add_middleware(

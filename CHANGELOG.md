@@ -2,6 +2,35 @@
 
 All notable changes to **The Extractor** will be documented in this file.
 
+## [2.6.0] - 2026-10-11
+
+### Security & Hardening
+- **Universal Non-Loopback API Key Enforcement**: Restricted unauthenticated access strictly to loopback interfaces (`127.0.0.1`, `localhost`, `::1`). Any binding to external or LAN interfaces (e.g. `192.168.x.x` or `0.0.0.0`) strictly requires `EXTRACTOR_API_KEY`.
+- **Timing Attack & Non-ASCII Safe Auth**: Normalized `X-API-Key` comparison using UTF-8 encoded bytes in `hmac.compare_digest` to eliminate 500 crashes on non-ASCII credentials.
+- **Security Headers Middleware**: Enforced `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, and `Referrer-Policy: no-referrer` on all HTTP responses.
+- **Docker Hardening**: Created and set non-root `appuser` (UID 1000), added container healthcheck probing `/healthz`, defaulted port publication to loopback (`127.0.0.1:8000:8000`), and enforced API key validation in `docker-compose.yml`.
+
+### Reliability & Resilience
+- **Real-Time Task Cancellation**: Introduced `DownloadCancelled` exception hooked into yt-dlp `progress_hooks` and between execution phases. Cancelling active downloads immediately halts the download and removes leftover `*.part` and `*.ytdl` files.
+- **Queue Slot Leak Prevention**: Wrapped task creation and background execution submission in atomic rollback blocks under `TASKS_LOCK`. Enqueue failures pop tasks immediately to avoid starvation.
+- **Atomic Batch Task Enqueue**: Allocated batch queue slots atomically under lock before starting database and executor operations with automated rollback on failure.
+- **Network & Task Timeout Protection**: Added a 30s socket timeout to all yt-dlp operations and a 60-minute task timeout worker to automatically clear hung tasks.
+- **Safe Storage Cleanup**: Restricted file pruning to media formats (`.mp4`, `.mp3`, `.wav`, `.m4a`, `.md`, `.txt`), protected active downloads (`*.part`, `*.ytdl`, `.gitkeep`) and files modified within 10 minutes, and automatically nulled deleted file paths in `extraction_history`.
+- **Fast Fail on Permanent Media Errors**: Distinguished permanent errors (private, deleted, age-restricted) from transient network errors (403, 429) to fail fast without wasting retries.
+- **Orphaned Task Recovery on Startup**: Automatically marked leftover `queued` and `running` tasks as `interrupted` upon database initialization.
+- **Graceful Lifespan Shutdown**: Integrated FastAPI lifespan shutdown to cleanly terminate background executor workers on exit.
+
+### Usability & Performance
+- **Environment-Aware Path Resolution**: Resolved configuration and default directories relative to `EXTRACTOR_HOME` or user directory instead of current working directory, printing resolved paths at startup.
+- **1-Hour PyPI Cache**: Added thread-safe in-memory caching for `check_ytdlp_version` to keep `/api/config` non-blocking.
+- **Lock Contention Reduction**: Moved database I/O outside `TASKS_LOCK` during task cancellation.
+- **Accurate Cancellation Statuses**: Returned accurate status reports when attempting to cancel finished or failed tasks.
+- **Playlist Expansion Error Visibility**: Logged expansion errors and surfaced skipped items in batch responses and UI toasts.
+- **Accurate Playlist Detection**: Switched `is_playlist_url` to `urllib.parse.parse_qs` to prevent false positives on query parameters like `blacklist=1`.
+- **yt-dlp Maintenance Runbook & CI Healthcheck**: Documented `pip install -U yt-dlp` runbook and added weekly scheduled CI extraction healthchecks.
+
+---
+
 ## [2.5.0] - 2026-09-06
 
 ### Added

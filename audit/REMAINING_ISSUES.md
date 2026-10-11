@@ -7,27 +7,24 @@ This document catalogues all items that could not be verified in the local test 
 ## 1. Environment Limitations
 
 ### 1.1 Live Upstream Third-Party Endpoints
-- **Constraint:** In accordance with the non-destructive testing mandate (Section 2.4), stress testing and heavy load testing did not target live external media hosts (YouTube, Vimeo, SoundCloud, etc.) or trigger bulk real-world media downloads.
+- **Constraint:** In accordance with the non-destructive testing mandate, stress testing and heavy load testing did not target live external media hosts (YouTube, Vimeo, SoundCloud, etc.) or trigger bulk real-world media downloads.
 - **Verification Performed:** Verified via comprehensive synthetic unit and integration tests using mocked `yt_dlp` extractors and synthetic payloads.
 - **Next User Verification Step:** To verify specific niche extractors or live downloads, execute single manual downloads via the UI on representative test media.
 
-### 1.2 Docker Multi-Node Deployment
-- **Constraint:** The current audit was executed within the primary Windows 11 host environment (`win32`). A multi-container Docker Swarm or Kubernetes deployment was not provisioned during this cycle.
+### 1.2 Multi-Node Container Orchestration
+- **Constraint:** The current audit was executed within the primary Windows 11 host environment (`win32`). Multi-node Kubernetes clustering was not evaluated.
 - **Verification Performed:** Hardened `Dockerfile` to create and run as a non-root `appuser` (UID 1000), added container `HEALTHCHECK` probing `/healthz`, and updated `docker-compose.yml` with mandatory `EXTRACTOR_API_KEY` validation, default loopback port publication (`127.0.0.1:8000:8000`), and safe optional configuration mounting.
-
 
 ---
 
 ## 2. Upstream Dependencies & External Factors
 
-### 2.1 Upstream PyPI Version Check Latency
-- **Finding Reference:** `FINDING-PERF-01`
-- **Details:** The function `check_ytdlp_version()` in [downloader.py](file:///d:/Projects/The%20Extractor/downloader.py) queries the PyPI JSON API synchronously. While fine for single-user desktop settings, high-frequency queries to `/api/config` from multiple clients will experience network latency unless cached.
-- **Recommendation:** Implement an in-memory TTL cache (e.g. 1-hour expiration) for upstream PyPI version lookups to decouple internal API latency from external network responsiveness.
-
-### 2.2 Upstream yt-dlp Changes & Site Breakages
+### 2.1 Upstream yt-dlp Changes & Site Breakages
 - **Details:** Video hosting platforms frequently modify their internal HTML layout, JavaScript obfuscation, or streaming protocols, which can cause `yt-dlp` extraction to fail until an updated release of `yt-dlp` is published.
-- **Mitigation:** The application includes a built-in `check_ytdlp_version` routine and alert banner informing users when an updated `yt-dlp` wheel is available.
+- **Mitigation & Automation:**
+  - The application includes a cached `check_ytdlp_version` routine informing users when an updated `yt-dlp` wheel is available.
+  - A weekly automated GitHub Actions healthcheck (`.github/workflows/ytdlp-health.yml`) validates public test video extraction.
+  - Troubleshooting guide documented in `README.md` (`pip install -U yt-dlp`).
 
 ---
 
@@ -47,6 +44,5 @@ This document catalogues all items that could not be verified in the local test 
 
 | Priority | Item | Description | Owner |
 |---|---|---|---|
-| **P3 (Low)** | PyPI TTL Cache | Cache PyPI response in `check_ytdlp_version` for 1 hour | Backend |
+| **P3 (Low)** | Server-Sent Events | Optional SSE stream for live task updates | Backend |
 | **P3 (Low)** | UI Virtualization | Add virtualized scrolling if page size > 200 items | Frontend |
-| **P4 (Info)** | Docker Compose Healthcheck | Add explicit container healthcheck in `docker-compose.yml` | DevOps |
