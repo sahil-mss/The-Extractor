@@ -11,6 +11,8 @@ All notable changes to **The Extractor** will be documented in this file.
 - **Docker Hardening & Host Permissions**: Configured container `user: "${UID:-1000}:${GID:-1000}"` in `docker-compose.yml` to prevent `PermissionError` on Linux host bind mounts (`./downloads`, `./data`), created non-root `appuser` (UID 1000), added container healthcheck probing `/healthz`, defaulted port publication to loopback (`127.0.0.1:8000:8000`), and enforced API key validation.
 
 ### Reliability & Resilience
+- **Database Persistence Retry & Logging on Success**: Wrapped completion database writes in `run_download_task` with an automated retry and `logger.error("Failed to persist completed task", exc_info=True)` to ensure persistence failures do not leave rows stuck in `queued` without diagnostic visibility.
+- **Auto-Update Timeout & Non-Interactive Safety**: Added a 120-second timeout, `subprocess.TimeoutExpired` handling, and `--no-input --disable-pip-version-check` flags to `auto_update_ytdlp_if_enabled` in `main.py` to prevent startup hangs.
 - **Real-Time Task Cancellation & Worker Halting on Timeout**: Ensured watchdog task timeouts add the timed-out task ID directly to `CANCELLED_TASKS`, interrupting the running download worker. Guarded completion and error status writes in `run_download_task` so worker completion cannot flip a timed-out `error` state back to `completed`.
 - **Watchdog Error Visibility**: Elevated task cleanup watchdog exceptions from `debug` to `logger.warning("task cleanup failed", exc_info=True)` to make background worker issues immediately visible.
 - **Suffixed Version Parsing**: Corrected `_parse_ver` in `downloader.py` to match leading digits (`re.match(r"\d+", p)`), ensuring release tags like `2026.8.19rc1` rank properly without mangling segment numbers.
@@ -24,6 +26,7 @@ All notable changes to **The Extractor** will be documented in this file.
 
 ### Usability & Performance
 - **Container yt-dlp Auto-Upgrade**: Added opt-in `EXTRACTOR_AUTO_UPDATE_YTDLP=1` support to automatically upgrade `yt-dlp` at container launch before starting the server.
+- **Docker Compose UID/GID Export Guide**: Documented exporting `UID=$(id -u)` and `GID=$(id -g)` to `.env` to prevent permission issues on host bind mounts when `$UID` is unexported in shells.
 - **Documented Home Directory Resolution Order**: Clarified working directory rules in documentation (`EXTRACTOR_HOME` -> current working directory if `config.yaml` / `config.yaml.example` is present -> `~/.the_extractor`).
 - **Environment-Aware Path Resolution**: Resolved configuration and default directories relative to `EXTRACTOR_HOME` or user directory instead of current working directory, printing resolved paths at startup.
 - **1-Hour PyPI Cache**: Added thread-safe in-memory caching for `check_ytdlp_version` to keep `/api/config` non-blocking.

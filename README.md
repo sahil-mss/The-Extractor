@@ -107,8 +107,9 @@ docker compose up -d
 Access the dashboard at `http://localhost:8000`. All downloaded files persist in `./downloads` and database records persist in `./data`.
 
 > [!NOTE]
-> **Linux Host Permissions:** The compose service runs with `user: "${UID:-1000}:${GID:-1000}"`. If your host directories were created by root or owned by another UID, ensure write permissions before starting:
+> **Linux Host Permissions:** The compose service runs with `user: "${UID:-1000}:${GID:-1000}"`. In bash, `$UID` is a shell variable rather than an exported environment variable. Before starting, export your UID/GID into a `.env` file and create the directories:
 > ```bash
+> echo "UID=$(id -u)" >> .env && echo "GID=$(id -g)" >> .env
 > mkdir -p downloads data && sudo chown -R 1000:1000 downloads data
 > ```
 
