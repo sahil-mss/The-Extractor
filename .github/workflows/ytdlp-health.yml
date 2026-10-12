@@ -25,6 +25,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Inspect public test video
+      - name: Install Node.js runtime for YouTube challenges
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Inspect public test video with JS runtime
         run: |
-          python -c "import yt_dlp; ydl = yt_dlp.YoutubeDL({'quiet': True, 'skip_download': True}); info = ydl.extract_info('https://www.youtube.com/watch?v=jNQXAC9IVRw', download=False); assert info and info.get('title'), 'Extraction failed'"
+          python -c "import downloader, yt_dlp; assert downloader.js_runtime_available(), 'JS runtime not detected'; opts = downloader.get_base_ydl_opts(); opts['skip_download'] = True; ydl = yt_dlp.YoutubeDL(opts); info = ydl.extract_info('https://www.youtube.com/watch?v=jNQXAC9IVRw', download=False); assert info and info.get('title'), 'Extraction failed'"

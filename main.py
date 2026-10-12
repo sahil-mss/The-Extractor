@@ -112,6 +112,11 @@ def main():
             f"Drive Free: {stats['disk_free_gb']} GB"
         )
 
+        # Check JS runtime for YouTube challenges
+        from downloader import js_runtime_available
+        if not js_runtime_available():
+            print("  ⚠️  WARNING: No JavaScript runtime detected (Deno/Node/Bun/QuickJS). YouTube extractions may fail!")
+
         # Check yt-dlp staleness
         ytdlp_status = check_ytdlp_version()
         if ytdlp_status.get("is_outdated"):

@@ -138,6 +138,17 @@ def clean_leftover_partial_files(target_dir: str, vid_id: str) -> None:
         pass
 
 
+def js_runtime_available() -> bool:
+    """Check if any supported JavaScript runtime (deno, node, bun, quickjs) is available on PATH."""
+    return bool(
+        shutil.which("deno")
+        or shutil.which("node")
+        or shutil.which("bun")
+        or shutil.which("quickjs")
+        or shutil.which("qjs")
+    )
+
+
 def find_ffmpeg_bin() -> str | None:
     """Locate ffmpeg executable across Windows, macOS, and Linux."""
     # 1. System PATH
@@ -454,6 +465,14 @@ def get_base_ydl_opts(cookies_path: str | None = None) -> dict[str, Any]:
     }
     if ffmpeg_path:
         opts['ffmpeg_location'] = ffmpeg_path
+
+    # JS Runtimes for YouTube challenges (Deno default, Node fallback, Bun, QuickJS)
+    opts['js_runtimes'] = {
+        'deno': {},
+        'node': {},
+        'bun': {},
+        'quickjs': {},
+    }
 
     # Cookies check
     cookie_file = cookies_path or config.paths.cookies_file

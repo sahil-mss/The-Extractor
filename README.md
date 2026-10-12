@@ -336,14 +336,38 @@ python downloader.py "https://www.youtube.com/playlist?list=PL..."
 
 ---
 
+## YouTube Needs a JavaScript Runtime
+
+Modern YouTube video extraction frequently relies on executing JavaScript challenges to verify client identity and resolve stream playback URLs. 
+
+The Extractor bundles `yt-dlp[default]`, which includes `yt-dlp-ejs`. To execute challenge solving scripts, **at least one supported JavaScript runtime must be installed on your system PATH**:
+
+- **Deno** (Recommended by yt-dlp): `curl -fsSL https://deno.land/install.sh | sh` or `winget install DenoLand.Deno`
+- **Node.js**: `apt install nodejs`, `brew install node`, or `winget install OpenJS.NodeJS`
+- **Bun**: `curl -fsSL https://bun.sh/install | bash` or `winget install Oven-sh.Bun`
+- **QuickJS**: `quickjs` or `qjs` binary
+
+The Extractor automatically detects installed runtimes and passes them to yt-dlp. You can inspect whether a JS runtime is detected in the startup terminal banner, `/api/config`, or the web dashboard. In Docker, Node.js is automatically pre-installed.
+
+---
+
 ## Troubleshooting & yt-dlp Breakage Runbook
+
+### "Video not available" or Extraction Failures
+If you encounter errors stating that a video is unavailable, sign-in is required, or extraction failed on a valid public video:
+1. **Missing JavaScript Runtime**: Check if a JavaScript engine (Deno or Node.js) is installed. Without a JS runtime, modern YouTube challenges fail and report the video as unavailable. Check the banner in the dashboard or terminal startup log.
+2. **Outdated yt-dlp**: YouTube regularly adjusts player mechanisms. Update yt-dlp via:
+   ```bash
+   pip install -U "yt-dlp[default]"
+   ```
+3. **Bot Detection or Geo-blocking**: Use `cookies.txt` (see [Cookies & Age-Restricted Videos](#cookies--age-restricted-videos)) to authenticate requests from your browser session.
 
 ### Downloads suddenly failing?
 YouTube frequently changes its internal player APIs, which can temporarily break video or audio extraction.
 If downloads suddenly start failing with extraction errors, upgrade `yt-dlp` to the latest release:
 
 ```bash
-pip install -U yt-dlp
+pip install -U "yt-dlp[default]"
 ```
 
 The Extractor also automatically checks PyPI every hour to notify you in the settings/status panel whenever your installed `yt-dlp` version becomes outdated.

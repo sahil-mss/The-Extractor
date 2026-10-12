@@ -17,6 +17,8 @@ def test_api_config():
     assert "download_dir" in data
     assert "audacity_detected" in data
     assert "defaults" in data
+    assert "js_runtime_available" in data
+    assert isinstance(data["js_runtime_available"], bool)
 
 def test_api_history():
     response = client.get("/api/history")

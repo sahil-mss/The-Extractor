@@ -381,3 +381,30 @@ def test_inspect_video_cancel_during_retry_sleep(monkeypatch):
     # It must break out much faster than the full 10.0s delay
     assert duration < 2.0
 
+
+def test_js_runtime_available(monkeypatch):
+    import shutil
+
+    from downloader import js_runtime_available
+
+    # 1. When deno is present
+    monkeypatch.setattr(shutil, "which", lambda cmd: "/usr/bin/deno" if cmd == "deno" else None)
+    assert js_runtime_available() is True
+
+    # 2. When node is present
+    monkeypatch.setattr(shutil, "which", lambda cmd: "/usr/bin/node" if cmd == "node" else None)
+    assert js_runtime_available() is True
+
+    # 3. When bun is present
+    monkeypatch.setattr(shutil, "which", lambda cmd: "/usr/bin/bun" if cmd == "bun" else None)
+    assert js_runtime_available() is True
+
+    # 4. When quickjs/qjs is present
+    monkeypatch.setattr(shutil, "which", lambda cmd: "/usr/bin/qjs" if cmd == "qjs" else None)
+    assert js_runtime_available() is True
+
+    # 5. When none are present
+    monkeypatch.setattr(shutil, "which", lambda cmd: None)
+    assert js_runtime_available() is False
+
+

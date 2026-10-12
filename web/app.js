@@ -114,6 +114,8 @@ const ytdlpAlertBanner = document.getElementById("ytdlpAlertBanner");
 const ytdlpCurrentVer = document.getElementById("ytdlpCurrentVer");
 const ytdlpLatestVer = document.getElementById("ytdlpLatestVer");
 const dismissYtdlpAlert = document.getElementById("dismissYtdlpAlert");
+const jsAlertBanner = document.getElementById("jsAlertBanner");
+const dismissJsAlert = document.getElementById("dismissJsAlert");
 
 // Quick Actions
 const openFolderBtn = document.getElementById("openFolderBtn");
@@ -710,6 +712,13 @@ async function refreshSystemStatus() {
       ytdlpAlertBanner.classList.add("hidden");
     }
 
+    // 3. JavaScript runtime missing alert
+    if (cfg.js_runtime_available === false) {
+      jsAlertBanner.classList.remove("hidden");
+    } else {
+      jsAlertBanner.classList.add("hidden");
+    }
+
     return cfg;
   } catch (e) {
     diskUsageText.textContent = "Disk: --";
@@ -718,6 +727,10 @@ async function refreshSystemStatus() {
 
 dismissYtdlpAlert.addEventListener("click", () => {
   ytdlpAlertBanner.classList.add("hidden");
+});
+
+dismissJsAlert.addEventListener("click", () => {
+  jsAlertBanner.classList.add("hidden");
 });
 
 navSettingsBtn.addEventListener("click", async () => {
@@ -734,6 +747,7 @@ navSettingsBtn.addEventListener("click", async () => {
         <p><strong>Disk Storage:</strong> <code>${storage.total_mb || 0} MB</code> (${storage.file_count || 0} files) | Drive Free: <code>${storage.disk_free_gb || 0} GB</code></p>
         <p><strong>Retention Policy:</strong> ${storage.max_storage_gb > 0 ? `Max ${storage.max_storage_gb} GB` : "No size cap"} | ${storage.delete_after_days > 0 ? `Auto-purge > ${storage.delete_after_days} days` : "Never purge by age"}</p>
         <p><strong>yt-dlp Engine:</strong> <code>v${escapeHtml(ytdlp.installed || "unknown")}</code> ${ytdlp.is_outdated ? `⚠️ (Newer version ${ytdlp.latest} available!)` : "✅ Up to date"}</p>
+        <p><strong>JS Runtime (YouTube):</strong> ${cfg.js_runtime_available ? "✅ Detected (Deno/Node/Bun/QuickJS)" : "⚠️ Not Found (Required for YouTube challenges)"}</p>
         <p><strong>Audacity Binary:</strong> <code>${escapeHtml(cfg.audacity_path)}</code> (${cfg.audacity_detected ? "✅ Detected" : "⚠️ Not Found"})</p>
         <p><strong>Cookies Configured:</strong> ${cfg.has_cookies ? "✅ Yes (cookies.txt)" : "❌ No"}</p>
         <p><strong>API Auth Enabled:</strong> ${cfg.auth_enabled ? "🔒 Yes" : "🔓 Public / Local"}</p>

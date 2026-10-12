@@ -38,6 +38,10 @@
         <span>⚠️ <strong>yt-dlp update available!</strong> Installed: <code id="ytdlpCurrentVer"></code> → Latest: <code id="ytdlpLatestVer"></code>. Run: <code>pip install --upgrade yt-dlp</code></span>
         <button id="dismissYtdlpAlert" class="btn-icon">✖</button>
       </div>
+      <div id="jsAlertBanner" class="ytdlp-alert hidden">
+        <span>⚠️ <strong>No JavaScript runtime found!</strong> YouTube challenges require a JS runtime (Deno, Node.js, Bun, or QuickJS) and <code>yt-dlp-ejs</code>. Extractions may fail with "video not available".</span>
+        <button id="dismissJsAlert" class="btn-icon">✖</button>
+      </div>
       <h1 class="app-title">The <span class="gradient-text">Extractor</span></h1>
       <p class="app-subtitle">Batch & playlist media downloader, tag inspector, timestamped transcript generator, and cross-platform Audacity audio studio.</p>
     </header>
