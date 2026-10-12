@@ -408,3 +408,26 @@ def test_js_runtime_available(monkeypatch):
     assert js_runtime_available() is False
 
 
+def test_ffmpeg_available(monkeypatch):
+    import shutil
+
+    import downloader
+    from downloader import ffmpeg_available
+
+    # 1. Found on PATH
+    monkeypatch.setattr(shutil, "which", lambda cmd: "/usr/bin/ffmpeg" if cmd == "ffmpeg" else None)
+    monkeypatch.setattr(downloader, "find_ffmpeg_bin", lambda: None)
+    assert ffmpeg_available() is True
+
+    # 2. Found by fallback (find_ffmpeg_bin returns directory or path)
+    monkeypatch.setattr(shutil, "which", lambda cmd: None)
+    monkeypatch.setattr(downloader, "find_ffmpeg_bin", lambda: "/opt/ffmpeg/bin")
+    assert ffmpeg_available() is True
+
+    # 3. Missing (neither on PATH nor found by fallback)
+    monkeypatch.setattr(shutil, "which", lambda cmd: None)
+    monkeypatch.setattr(downloader, "find_ffmpeg_bin", lambda: None)
+    assert ffmpeg_available() is False
+
+
+

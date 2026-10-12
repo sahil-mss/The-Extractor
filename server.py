@@ -220,6 +220,7 @@ def api_get_config(authorized: bool = Depends(verify_api_key)):
         "has_cookies": bool(config.paths.cookies_file and os.path.exists(config.paths.cookies_file)),
         "auth_enabled": bool(config.app.api_key),
         "js_runtime_available": downloader.js_runtime_available(),
+        "ffmpeg_available": downloader.ffmpeg_available(),
         "defaults": config.defaults.model_dump(),
         "storage": storage_stats,
         "ytdlp": ytdlp_info,

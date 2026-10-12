@@ -149,6 +149,11 @@ def js_runtime_available() -> bool:
     )
 
 
+def ffmpeg_available() -> bool:
+    """Check if ffmpeg executable is available on PATH or found by fallback."""
+    return bool(shutil.which("ffmpeg") or find_ffmpeg_bin())
+
+
 def find_ffmpeg_bin() -> str | None:
     """Locate ffmpeg executable across Windows, macOS, and Linux."""
     # 1. System PATH

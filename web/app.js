@@ -116,6 +116,8 @@ const ytdlpLatestVer = document.getElementById("ytdlpLatestVer");
 const dismissYtdlpAlert = document.getElementById("dismissYtdlpAlert");
 const jsAlertBanner = document.getElementById("jsAlertBanner");
 const dismissJsAlert = document.getElementById("dismissJsAlert");
+const ffmpegAlertBanner = document.getElementById("ffmpegAlertBanner");
+const dismissFfmpegAlert = document.getElementById("dismissFfmpegAlert");
 
 // Quick Actions
 const openFolderBtn = document.getElementById("openFolderBtn");
@@ -719,6 +721,13 @@ async function refreshSystemStatus() {
       jsAlertBanner.classList.add("hidden");
     }
 
+    // 4. FFmpeg missing alert
+    if (cfg.ffmpeg_available === false) {
+      ffmpegAlertBanner.classList.remove("hidden");
+    } else {
+      ffmpegAlertBanner.classList.add("hidden");
+    }
+
     return cfg;
   } catch (e) {
     diskUsageText.textContent = "Disk: --";
@@ -731,6 +740,10 @@ dismissYtdlpAlert.addEventListener("click", () => {
 
 dismissJsAlert.addEventListener("click", () => {
   jsAlertBanner.classList.add("hidden");
+});
+
+dismissFfmpegAlert.addEventListener("click", () => {
+  ffmpegAlertBanner.classList.add("hidden");
 });
 
 navSettingsBtn.addEventListener("click", async () => {
@@ -748,6 +761,7 @@ navSettingsBtn.addEventListener("click", async () => {
         <p><strong>Retention Policy:</strong> ${storage.max_storage_gb > 0 ? `Max ${storage.max_storage_gb} GB` : "No size cap"} | ${storage.delete_after_days > 0 ? `Auto-purge > ${storage.delete_after_days} days` : "Never purge by age"}</p>
         <p><strong>yt-dlp Engine:</strong> <code>v${escapeHtml(ytdlp.installed || "unknown")}</code> ${ytdlp.is_outdated ? `⚠️ (Newer version ${ytdlp.latest} available!)` : "✅ Up to date"}</p>
         <p><strong>JS Runtime (YouTube):</strong> ${cfg.js_runtime_available ? "✅ Detected (Deno/Node/Bun/QuickJS)" : "⚠️ Not Found (Required for YouTube challenges)"}</p>
+        <p><strong>FFmpeg Suite:</strong> ${cfg.ffmpeg_available ? "✅ Detected" : "⚠️ Not Found (Required for audio/video merges)"}</p>
         <p><strong>Audacity Binary:</strong> <code>${escapeHtml(cfg.audacity_path)}</code> (${cfg.audacity_detected ? "✅ Detected" : "⚠️ Not Found"})</p>
         <p><strong>Cookies Configured:</strong> ${cfg.has_cookies ? "✅ Yes (cookies.txt)" : "❌ No"}</p>
         <p><strong>API Auth Enabled:</strong> ${cfg.auth_enabled ? "🔒 Yes" : "🔓 Public / Local"}</p>

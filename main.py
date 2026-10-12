@@ -112,8 +112,10 @@ def main():
             f"Drive Free: {stats['disk_free_gb']} GB"
         )
 
-        # Check JS runtime for YouTube challenges
-        from downloader import js_runtime_available
+        # Check external runtimes (FFmpeg and JS engine)
+        from downloader import ffmpeg_available, js_runtime_available
+        if not ffmpeg_available():
+            print("  ⚠️  WARNING: FFmpeg was not found. Audio extraction and format conversions may fail!")
         if not js_runtime_available():
             print("  ⚠️  WARNING: No JavaScript runtime detected (Deno/Node/Bun/QuickJS). YouTube extractions may fail!")
 

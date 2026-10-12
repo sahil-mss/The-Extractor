@@ -19,6 +19,8 @@ def test_api_config():
     assert "defaults" in data
     assert "js_runtime_available" in data
     assert isinstance(data["js_runtime_available"], bool)
+    assert "ffmpeg_available" in data
+    assert isinstance(data["ffmpeg_available"], bool)
 
 def test_api_history():
     response = client.get("/api/history")

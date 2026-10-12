@@ -42,6 +42,10 @@
         <span>⚠️ <strong>No JavaScript runtime found!</strong> YouTube challenges require a JS runtime (Deno, Node.js, Bun, or QuickJS) and <code>yt-dlp-ejs</code>. Extractions may fail with "video not available".</span>
         <button id="dismissJsAlert" class="btn-icon">✖</button>
       </div>
+      <div id="ffmpegAlertBanner" class="ytdlp-alert hidden">
+        <span>⚠️ <strong>FFmpeg not found!</strong> Media merging, video format conversion, and audio extraction require FFmpeg. Please install FFmpeg on PATH.</span>
+        <button id="dismissFfmpegAlert" class="btn-icon">✖</button>
+      </div>
       <h1 class="app-title">The <span class="gradient-text">Extractor</span></h1>
       <p class="app-subtitle">Batch & playlist media downloader, tag inspector, timestamped transcript generator, and cross-platform Audacity audio studio.</p>
     </header>
