@@ -103,7 +103,7 @@ def record_auth_failure(ip: str, now: float) -> None:
         AUTH_FAILURES[ip] = []
 
 def verify_api_key(request: Request, x_api_key: str | None = Header(None)):
-    """Verify API key if configured, or require it for non-localhost if configured using constant-time comparison and rate limiting."""
+    """Verify API key using constant-time comparison and in-memory rate limiting."""
     must_require = bool(config.app.api_key) or (
         is_non_localhost(config.app.host) and config.security.require_api_key_for_non_localhost
     )
@@ -161,6 +161,18 @@ def task_cleanup_worker():
                 for tid in expired_ids:
                     TASKS.pop(tid, None)
                     CANCELLED_TASKS.discard(tid)
+
+            # Clean up expired auth failure tracking entries
+            with AUTH_FAILURES_LOCK:
+                for ip, block_end in list(AUTH_BLOCKED_UNTIL.items()):
+                    if now >= block_end:
+                        AUTH_BLOCKED_UNTIL.pop(ip, None)
+                for ip, history in list(AUTH_FAILURES.items()):
+                    valid_history = [t for t in history if (now - t) <= 300.0]
+                    if valid_history:
+                        AUTH_FAILURES[ip] = valid_history
+                    else:
+                        AUTH_FAILURES.pop(ip, None)
 
             for tid, url in timed_out_tasks:
                 try:

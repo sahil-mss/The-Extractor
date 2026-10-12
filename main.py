@@ -1,4 +1,5 @@
 import argparse
+import contextlib
 import os
 import subprocess
 import sys
@@ -39,10 +40,8 @@ def auto_update_ytdlp_if_enabled():
 def open_browser_delayed(url: str, delay: float = 1.2):
     """Open default browser after server initialization."""
     time.sleep(delay)
-    try:
+    with contextlib.suppress(Exception):
         webbrowser.open(url)
-    except Exception:
-        pass
 
 def main():
     parser = argparse.ArgumentParser(
@@ -64,10 +63,7 @@ def main():
     host = args.host
     port = args.port
     server_url = f"http://{host}:{port}"
-    if host in ("0.0.0.0", "::"):
-        browser_url = f"http://localhost:{port}"
-    else:
-        browser_url = server_url
+    browser_url = f"http://localhost:{port}" if host in ("0.0.0.0", "::") else server_url
 
     print("=" * 70)
     print("  🚀 The Extractor — Self-Hosted Media Studio")

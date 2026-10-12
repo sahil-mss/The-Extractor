@@ -1,4 +1,5 @@
 import ipaddress
+import json
 import os
 import platform
 import re
@@ -6,6 +7,7 @@ import shutil
 import sys
 import threading
 import time
+import urllib.request
 from collections.abc import Callable
 from typing import Any
 from urllib.parse import parse_qs, urlparse
@@ -218,11 +220,9 @@ def check_ytdlp_version(force_refresh: bool = False) -> dict[str, Any]:
         }
 
         try:
-            import json
-            import urllib.request
             req = urllib.request.Request(
                 "https://pypi.org/pypi/yt-dlp/json",
-                headers={"User-Agent": "TheExtractor/2.6.1"}
+                headers={"User-Agent": "TheExtractor/2.7.0"}
             )
             with urllib.request.urlopen(req, timeout=3.0) as resp:
                 if resp.status == 200:
@@ -330,7 +330,7 @@ def perform_storage_cleanup(
                         if entry.is_file(follow_symlinks=False):
                             name = entry.name
                             ext = os.path.splitext(name)[1].lower()
-                            if ext not in allowed_extensions or name == ".gitkeep" or name.endswith(".part") or name.endswith(".ytdl"):
+                            if ext not in allowed_extensions or name == ".gitkeep" or name.endswith((".part", ".ytdl")):
                                 continue
                             st = entry.stat()
                             if (now - st.st_mtime) < min_age_seconds:
@@ -433,10 +433,7 @@ def is_playlist_url(url: str) -> bool:
                 return False
 
         # If it has a video parameter (v=...) without playlist index navigation, treat as single video
-        if "v" in qs and "index" not in qs:
-            return False
-
-        return True
+        return not ("v" in qs and "index" not in qs)
     except Exception:
         return False
 
@@ -737,22 +734,21 @@ TRANSCRIPT:
 
 def resolve_video_format_string(resolution: str = "best") -> str:
     """Resolve format selector string based on chosen resolution."""
-    if resolution == "1080p":
-        return (
+    formats = {
+        "1080p": (
             "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/"
             "bestvideo[height<=1080]+bestaudio/best[height<=1080]"
-        )
-    elif resolution == "720p":
-        return (
+        ),
+        "720p": (
             "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/"
             "bestvideo[height<=720]+bestaudio/best[height<=720]"
-        )
-    elif resolution == "480p":
-        return (
+        ),
+        "480p": (
             "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/"
             "bestvideo[height<=480]+bestaudio/best[height<=480]"
-        )
-    return "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best"
+        ),
+    }
+    return formats.get(resolution, "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best")
 
 def download_media_bundle(
     url: str,
