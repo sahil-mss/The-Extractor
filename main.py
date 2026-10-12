@@ -72,6 +72,7 @@ def main():
     print(f"  Config:    {config.paths.download_dir}")
     print(f"  Downloads: {config.absolute_download_dir}")
     print(f"  Database:  {config.database_path}")
+    print(f"  Log File:  {config.absolute_log_file}")
 
     # Check opt-in yt-dlp auto-update
     auto_update_ytdlp_if_enabled()

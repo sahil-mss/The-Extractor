@@ -277,6 +277,7 @@ def api_get_config(authorized: bool = Depends(verify_api_key)):
 
     return {
         "download_dir": config.absolute_download_dir,
+        "log_file": config.absolute_log_file,
         "audacity_detected": bool(audacity_bin),
         "audacity_path": audacity_bin or "Not Found",
         "has_cookies": bool(config.paths.cookies_file and os.path.exists(config.paths.cookies_file)),

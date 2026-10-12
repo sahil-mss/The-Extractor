@@ -21,23 +21,28 @@ Imagine you found a great YouTube video or playlist, and you want:
 
 ---
 
-## 🏃 Quick Start (3 Steps for Anyone)
+## 🏃 Quick Start (One-Click Launch — No Setup Needed!)
 
-### Step 1: Open your terminal or command prompt
-- **Windows**: Press `Win + R`, type `cmd`, and press Enter.
-- **Mac**: Press `Cmd + Space`, type `Terminal`, and press Enter.
-- **Linux**: Open your regular terminal window.
+You don't need to manually install dependencies or set up environments. The Extractor includes a smart launcher with logo branding and automated virtual environment setup.
 
-### Step 2: Install and start
-Run these two commands:
+### Option A: The Easiest Way (Double-Click or 1 Command)
+- **Windows**: Double-click `launch.bat` (or open Command Prompt and type `launch.bat` or `python launcher.py`).
+- **Mac / Linux**: Open Terminal and run `./launch.sh` (or `python3 launcher.py`).
+
+> 💡 **What the launcher does automatically:**
+> 1. Checks if your Python virtual environment (`.venv`) exists; if not, creates it automatically.
+> 2. Checks if all requirements are installed; if missing, installs them automatically on first launch.
+> 3. Verifies your system for JavaScript engines (`Node.js`/`Deno`) and `FFmpeg`.
+> 4. Logs all startup and activity diagnostics cleanly to `extractor.log`.
+> 5. Opens your browser automatically to **`http://localhost:8000`**!
+
+---
+
+### Option B: Run Directly with Python
 ```bash
 pip install -r requirements.txt
 python main.py
 ```
-
-### Step 3: Use it in your browser!
-Your web browser will automatically open to:
-👉 **`http://localhost:8000`**
 
 Paste any YouTube link into the box, click **Inspect & Extract**, and you're done!
 
@@ -45,7 +50,7 @@ Paste any YouTube link into the box, click **Inspect & Extract**, and you're don
 
 ## 📑 Table of Contents
 - [What is this?](#-what-is-this-in-simple-words-1-minute-explanation)
-- [Quick 3-Step Start](#-quick-start-3-steps-for-anyone)
+- [Quick Start](#-quick-start-one-click-launch--no-setup-needed)
 - [Overview](#overview)
 - [Key Features](#key-features)
 - [Quick Start](#quick-start)

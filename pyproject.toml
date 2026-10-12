@@ -34,7 +34,7 @@ the-extractor = "main:main"
 extractor = "main:main"
 
 [tool.setuptools]
-py-modules = ["server", "downloader", "config", "database", "main"]
+py-modules = ["server", "downloader", "config", "database", "main", "launcher"]
 packages = ["web"]
 include-package-data = true
 

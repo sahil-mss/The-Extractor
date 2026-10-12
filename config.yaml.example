@@ -16,6 +16,7 @@ security:
 paths:
   download_dir: "downloads"   # Path relative to workspace or absolute path
   data_dir: "data"
+  log_file: "extractor.log"   # Path to application log file
   cookies_file: ""            # Optional path to cookies.txt (e.g. "cookies.txt")
   audacity_path: ""           # Optional explicit path to Audacity executable (auto-detected if empty)
 

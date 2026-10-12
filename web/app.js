@@ -757,6 +757,7 @@ navSettingsBtn.addEventListener("click", async () => {
     settingsContent.innerHTML = `
       <div style="font-size: 0.9rem; line-height: 1.6;">
         <p><strong>Downloads Directory:</strong> <code>${escapeHtml(cfg.download_dir)}</code></p>
+        <p><strong>Log File:</strong> <code>${escapeHtml(cfg.log_file || "extractor.log")}</code></p>
         <p><strong>Disk Storage:</strong> <code>${storage.total_mb || 0} MB</code> (${storage.file_count || 0} files) | Drive Free: <code>${storage.disk_free_gb || 0} GB</code></p>
         <p><strong>Retention Policy:</strong> ${storage.max_storage_gb > 0 ? `Max ${storage.max_storage_gb} GB` : "No size cap"} | ${storage.delete_after_days > 0 ? `Auto-purge > ${storage.delete_after_days} days` : "Never purge by age"}</p>
         <p><strong>yt-dlp Engine:</strong> <code>v${escapeHtml(ytdlp.installed || "unknown")}</code> ${ytdlp.is_outdated ? `⚠️ (Newer version ${ytdlp.latest} available!)` : "✅ Up to date"}</p>

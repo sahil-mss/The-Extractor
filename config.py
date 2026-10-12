@@ -1,4 +1,5 @@
 import ipaddress
+import logging
 import os
 import platform
 import shutil
@@ -45,6 +46,7 @@ class SecurityConfig(BaseModel):
 class PathsConfig(BaseModel):
     download_dir: str = "downloads"
     data_dir: str = "data"
+    log_file: str = "extractor.log"
     cookies_file: str = ""
     audacity_path: str = ""
 
@@ -103,6 +105,13 @@ class Config(BaseModel):
     @property
     def database_path(self) -> str:
         return os.path.join(self.absolute_data_dir, "extractor.db")
+
+    @property
+    def absolute_log_file(self) -> str:
+        lf = self.paths.log_file
+        if os.path.isabs(lf):
+            return os.path.abspath(lf)
+        return os.path.abspath(os.path.join(get_extractor_home(), lf))
 
     def get_audacity_executable(self) -> str | None:
         """Cross-platform Audacity executable detection."""
@@ -179,6 +188,8 @@ def load_config(config_path: str | None = None) -> Config:
         data.setdefault("paths", {})["download_dir"] = os.environ["EXTRACTOR_DOWNLOAD_DIR"]
     if "EXTRACTOR_DATA_DIR" in os.environ:
         data.setdefault("paths", {})["data_dir"] = os.environ["EXTRACTOR_DATA_DIR"]
+    if "EXTRACTOR_LOG_FILE" in os.environ:
+        data.setdefault("paths", {})["log_file"] = os.environ["EXTRACTOR_LOG_FILE"]
     if "EXTRACTOR_API_KEY" in os.environ:
         data.setdefault("app", {})["api_key"] = os.environ["EXTRACTOR_API_KEY"]
     if "EXTRACTOR_HOST" in os.environ:
@@ -248,7 +259,44 @@ def validate_startup_security(cfg: Config) -> None:
 
 
 
+def setup_logging(cfg: Config | None = None) -> logging.Logger:
+    """Configures root and app logging to output to both console and log file."""
+    active_cfg = cfg or config
+    log_path = active_cfg.absolute_log_file
+
+    # Ensure parent directory exists
+    log_dir = os.path.dirname(log_path)
+    if log_dir:
+        os.makedirs(log_dir, exist_ok=True)
+
+    app_logger = logging.getLogger("the_extractor")
+    app_logger.setLevel(logging.INFO)
+
+    # Avoid duplicate handlers if setup_logging is called multiple times
+    if not any(isinstance(h, logging.FileHandler) and getattr(h, "baseFilename", None) == os.path.abspath(log_path) for h in app_logger.handlers):
+        formatter = logging.Formatter(
+            fmt="%(asctime)s [%(levelname)s] %(name)s (%(process)d): %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S"
+        )
+        try:
+            file_handler = logging.FileHandler(log_path, encoding="utf-8")
+            file_handler.setLevel(logging.INFO)
+            file_handler.setFormatter(formatter)
+            app_logger.addHandler(file_handler)
+
+            # Also attach to uvicorn loggers so HTTP access and errors persist to log file
+            for uvicorn_log_name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
+                u_log = logging.getLogger(uvicorn_log_name)
+                if not any(isinstance(h, logging.FileHandler) for h in u_log.handlers):
+                    u_log.addHandler(file_handler)
+        except Exception as e:
+            print(f"[!] Warning: Could not initialize log file at {log_path}: {e}", file=sys.stderr)
+
+    return app_logger
+
+
 # Global singleton
 config = load_config()
+logger = setup_logging(config)
 
 

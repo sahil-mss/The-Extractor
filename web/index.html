@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
+  <link rel="icon" type="image/svg+xml" href="logo.svg">
 </head>
 <body>
   <div class="glow-orb orb-top-left"></div>
@@ -46,7 +47,10 @@
         <span>⚠️ <strong>FFmpeg not found!</strong> Media merging, video format conversion, and audio extraction require FFmpeg. Please install FFmpeg on PATH.</span>
         <button id="dismissFfmpegAlert" class="btn-icon">✖</button>
       </div>
-      <h1 class="app-title">The <span class="gradient-text">Extractor</span></h1>
+      <div class="app-brand-title">
+        <img src="logo.svg" alt="The Extractor Logo" class="app-logo-img">
+        <h1 class="app-title">The <span class="gradient-text">Extractor</span></h1>
+      </div>
       <p class="app-subtitle">Batch & playlist media downloader, tag inspector, timestamped transcript generator, and cross-platform Audacity audio studio.</p>
     </header>
 

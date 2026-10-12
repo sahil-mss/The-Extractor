@@ -21,6 +21,22 @@ def test_extractor_home_path_resolution(monkeypatch, tmp_path):
     assert cfg.absolute_download_dir == os.path.abspath(os.path.join(custom_home, "downloads"))
     assert cfg.absolute_data_dir == os.path.abspath(os.path.join(custom_home, "data"))
     assert cfg.database_path == os.path.abspath(os.path.join(custom_home, "data", "extractor.db"))
+    assert cfg.absolute_log_file == os.path.abspath(os.path.join(custom_home, "extractor.log"))
+
+
+def test_setup_logging(tmp_path):
+    from config import Config, setup_logging
+    cfg = Config()
+    custom_log = str(tmp_path / "test.log")
+    cfg.paths.log_file = custom_log
+
+    logger = setup_logging(cfg)
+    assert logger.name == "the_extractor"
+    logger.info("Test log line")
+    assert os.path.exists(custom_log)
+    with open(custom_log, encoding="utf-8") as f:
+        content = f.read()
+    assert "Test log line" in content
 
 def test_audacity_resolver():
     cfg = Config()
