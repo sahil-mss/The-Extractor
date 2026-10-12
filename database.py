@@ -35,6 +35,7 @@ def init_db():
             audio_path TEXT,
             doc_md_path TEXT,
             doc_txt_path TEXT,
+            json_path TEXT,
             status TEXT NOT NULL,
             error_message TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -44,6 +45,12 @@ def init_db():
         conn.execute("CREATE INDEX IF NOT EXISTS idx_history_task_id ON extraction_history(task_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_history_created_at ON extraction_history(id DESC)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_history_lookup ON extraction_history(url, video_id)")
+
+        # Migration: Ensure json_path exists in existing databases
+        try:
+            conn.execute("ALTER TABLE extraction_history ADD COLUMN json_path TEXT")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
 
         # Mark any tasks left in 'queued' or 'running' state from previous crash/restart as 'interrupted'
         conn.execute("""
@@ -98,14 +105,15 @@ def record_task_completed(
     doc_files = results.get("doc_files") or {}
     md_path = doc_files.get("md") if isinstance(doc_files, dict) else None
     txt_path = doc_files.get("txt") if isinstance(doc_files, dict) else None
+    json_path = results.get("json_file")
 
     with get_db_connection() as conn:
         conn.execute("""
             INSERT INTO extraction_history (
                 task_id, url, video_id, title, channel, duration, thumbnail,
-                tags_count, has_transcript, video_path, audio_path, doc_md_path, doc_txt_path,
+                tags_count, has_transcript, video_path, audio_path, doc_md_path, doc_txt_path, json_path,
                 status, error_message, completed_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(task_id) DO UPDATE SET
                 url=excluded.url,
                 video_id=excluded.video_id,
@@ -119,6 +127,7 @@ def record_task_completed(
                 audio_path=excluded.audio_path,
                 doc_md_path=excluded.doc_md_path,
                 doc_txt_path=excluded.doc_txt_path,
+                json_path=excluded.json_path,
                 status=excluded.status,
                 error_message=excluded.error_message,
                 completed_at=excluded.completed_at
@@ -136,6 +145,7 @@ def record_task_completed(
             results.get("audio_file"),
             md_path,
             txt_path,
+            json_path,
             status,
             error_message,
             completed_at
@@ -274,8 +284,11 @@ def apply_history_retention(
 
 def _remove_safe_files(rows: list[sqlite3.Row] | sqlite3.Cursor) -> None:
     for row in rows:
-        for col in ("video_path", "audio_path", "doc_md_path", "doc_txt_path"):
-            fpath = row[col]
+        for col in ("video_path", "audio_path", "doc_md_path", "doc_txt_path", "json_path"):
+            try:
+                fpath = row[col]
+            except IndexError:
+                continue
             if fpath and is_safe_download_path(fpath) and os.path.exists(fpath):
                 try:
                     os.remove(fpath)
@@ -286,7 +299,7 @@ def delete_history_item(item_id: int, delete_files: bool = False) -> bool:
     with get_db_connection() as conn:
         if delete_files:
             cursor = conn.execute(
-                "SELECT video_path, audio_path, doc_md_path, doc_txt_path "
+                "SELECT video_path, audio_path, doc_md_path, doc_txt_path, json_path "
                 "FROM extraction_history WHERE id = ?",
                 (item_id,)
             )
@@ -300,7 +313,7 @@ def clear_all_history(delete_files: bool = False) -> None:
     with get_db_connection() as conn:
         if delete_files:
             cursor = conn.execute(
-                "SELECT video_path, audio_path, doc_md_path, doc_txt_path "
+                "SELECT video_path, audio_path, doc_md_path, doc_txt_path, json_path "
                 "FROM extraction_history"
             )
             _remove_safe_files(cursor.fetchall())
@@ -322,9 +335,10 @@ def null_deleted_file_paths(file_paths: list[str]) -> int:
                 SET video_path = CASE WHEN video_path = ? THEN NULL ELSE video_path END,
                     audio_path = CASE WHEN audio_path = ? THEN NULL ELSE audio_path END,
                     doc_md_path = CASE WHEN doc_md_path = ? THEN NULL ELSE doc_md_path END,
-                    doc_txt_path = CASE WHEN doc_txt_path = ? THEN NULL ELSE doc_txt_path END
-                WHERE video_path = ? OR audio_path = ? OR doc_md_path = ? OR doc_txt_path = ?
-            """, (p, p, p, p, p, p, p, p))
+                    doc_txt_path = CASE WHEN doc_txt_path = ? THEN NULL ELSE doc_txt_path END,
+                    json_path = CASE WHEN json_path = ? THEN NULL ELSE json_path END
+                WHERE video_path = ? OR audio_path = ? OR doc_md_path = ? OR doc_txt_path = ? OR json_path = ?
+            """, (p, p, p, p, p, p, p, p, p, p))
             updated_count += cur.rowcount
 
     return updated_count

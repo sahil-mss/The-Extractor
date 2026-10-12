@@ -94,12 +94,16 @@ Unlike basic download scripts, The Extractor features:
 
 ## Key Features
 
-- ⚡ **Instant Metadata & Tag Inspection**: Extract all video information (title, channel, views, duration, upload date) and uncover YouTube video tags/keywords that are normally hidden.
-- 📜 **Timestamped Transcript Extraction**: Automatically pulls subtitle and speech-to-text transcripts with precise start timestamps formatted as `[MM:SS]` or `[HH:MM:SS]`.
+- 👶 **Baby-Simple UI Redesign**: Designed so anyone can use it effortlessly without technical jargon. Warm charcoal & coral aesthetic (no harsh blues).
+- 💬 **Viewer Comments Search**: Browse and search through top YouTube discussions and viewer comments directly within the dashboard.
+- ✂️ **Snippet & Clip Range Trimming**: Download only the segment you want (e.g. 0:15 to 1:30 or custom seconds) with keyframe-accurate cuts instead of downloading the whole video.
+- 📁 **Custom Save Folders**: Direct downloads into any folder you choose, keeping your files organized automatically.
+- 📊 **Complete Data Export (JSON)**: Export all video metadata, transcripts, and comments as structured JSON or standard media files (.mp4, .mp3, .md/.txt).
+- ⚡ **Instant Metadata & Tag Inspection**: Extract video information (title, channel, views, duration, upload date) and uncover YouTube video tags/keywords that are normally hidden.
+- 📜 **Timestamped Transcript Extraction & Search**: Search through spoken words inside the video and extract speech-to-text transcripts with precise start timestamps.
 - 🔁 **Batch & Playlist Ingestion**: Input a list of URLs (one per line or comma-separated) or a YouTube playlist URL. The background task worker processes them smoothly with real-time queue monitors.
 - 💾 **Persistent SQLite Job History**: All tasks, file locations, titles, tags, and execution statuses are saved in an embedded SQLite database (`extractor.db`). Never lose track of what you've extracted.
 - 🎚️ **Format & Quality Selection**: Select video resolutions (**Best/4K, 1080p, 720p, 480p**) and audio formats (**MP3 320k/192k/128k, WAV lossless, M4A**).
-- 📦 **Dual Metadata Documents**: Generates clean `[METADATA].md` (Markdown) and `[METADATA].txt` files containing channel stats, tags, description, and transcripts.
 - 🎙️ **Cross-Platform Audacity Studio**: Dynamic binary detection for Audacity on Windows, macOS (`/Applications/Audacity.app`), and Linux (`/usr/bin/audacity`). One-click launching with the extracted audio track loaded.
 - 🍪 **Cookies & Auth Support**: Optional `cookies.txt` support for age-restricted or bot-detected YouTube videos, plus optional API key protection for LAN/remote hosting.
 - 🐳 **Docker & Compose Ready**: Bundles Python, FFmpeg, and dependencies inside a production Docker container.

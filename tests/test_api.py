@@ -41,7 +41,7 @@ def test_api_inspect_invalid_url():
 def test_api_inspect_upstream_failure_returns_502(monkeypatch):
     import downloader
 
-    def mock_inspect(url, cookies_path=None):
+    def mock_inspect(url, cookies_path=None, **kwargs):
         raise RuntimeError("Failed to inspect video after 3 attempts: Connection error")
 
     monkeypatch.setattr(downloader, "inspect_video", mock_inspect)
@@ -157,4 +157,56 @@ def test_auth_failure_throttle(monkeypatch):
     with server.AUTH_FAILURES_LOCK:
         server.AUTH_FAILURES.clear()
         server.AUTH_BLOCKED_UNTIL.clear()
+
+
+def test_api_comments_success(monkeypatch):
+    import downloader
+
+    def mock_fetch_comments(url, max_comments=50, cookies_path=None):
+        return [
+            {"author": "alice", "text": "Great explanation!", "likes": 12, "id": "c1"},
+            {"author": "bob", "text": "Loved the audio quality", "likes": 5, "id": "c2"},
+        ]
+
+    monkeypatch.setattr(downloader, "fetch_comments_data", mock_fetch_comments)
+    resp = client.post("/api/comments", json={"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ", "max_comments": 20})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "success"
+    assert data["count"] == 2
+    assert data["comments"][0]["author"] == "alice"
+
+
+def test_api_download_with_snippet_and_json(monkeypatch):
+    import downloader
+
+    recorded_kwargs = {}
+
+    def mock_download_bundle(url, **kwargs):
+        recorded_kwargs.update(kwargs)
+        return {
+            "title": "Snippet Video",
+            "channel": "Test Channel",
+            "video_path": "downloads/test.mp4",
+            "audio_path": None,
+            "doc_path": None,
+            "json_path": "downloads/test.json",
+        }
+
+    monkeypatch.setattr(downloader, "download_media_bundle", mock_download_bundle)
+
+    payload = {
+        "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        "download_video": True,
+        "download_audio": False,
+        "download_doc": False,
+        "download_json": True,
+        "start_time": 10.0,
+        "end_time": 45.5,
+        "output_dir": "custom_folder",
+    }
+    resp = client.post("/api/download", json=payload)
+    assert resp.status_code == 200
+    task_id = resp.json()["task_id"]
+    assert task_id is not None
 

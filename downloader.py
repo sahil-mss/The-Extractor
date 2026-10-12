@@ -563,10 +563,57 @@ def fetch_transcript_data(video_id: str, ydl_info: dict | None = None) -> list[d
 
     return transcript_items
 
+
+def fetch_comments_data(
+    url: str,
+    max_comments: int = 50,
+    cookies_path: str | None = None,
+    is_cancelled: Callable[[], bool] | None = None,
+) -> list[dict[str, Any]]:
+    """
+    Fetch top user comments for a video using yt-dlp.
+    Returns [{'id': '...', 'author': '...', 'text': '...', 'like_count': 12, 'timestamp': '...', 'author_thumbnail': '...'}]
+    """
+    valid, err_msg = is_valid_youtube_url(url)
+    if not valid:
+        return []
+
+    opts = get_base_ydl_opts(cookies_path)
+    opts.update({
+        'skip_download': True,
+        'extract_flat': False,
+        'getcomments': True,
+        'extractor_args': {'youtube': {'max_comments': [str(max_comments)]}},
+    })
+
+    try:
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            if is_cancelled and is_cancelled():
+                return []
+            info = ydl.extract_info(url, download=False)
+            raw_comments = info.get('comments', []) if info else []
+            cleaned = []
+            for c in raw_comments[:max_comments]:
+                if not c:
+                    continue
+                cleaned.append({
+                    'id': str(c.get('id', '')),
+                    'author': c.get('author') or c.get('author_id') or 'Anonymous',
+                    'author_thumbnail': c.get('author_thumbnail') or '',
+                    'text': c.get('text', '').strip(),
+                    'like_count': c.get('like_count', 0) or 0,
+                    'timestamp': c.get('timestamp') or 0,
+                    'is_favorited': bool(c.get('is_favorited')),
+                })
+            return cleaned
+    except Exception:
+        return []
+
 def inspect_video(
     url: str,
     cookies_path: str | None = None,
     is_cancelled: Callable[[], bool] | None = None,
+    fetch_comments: bool = False,
 ) -> dict[str, Any]:
     """
     Inspect YouTube video to extract all metadata, tags, and transcript preview without downloading.
@@ -619,6 +666,7 @@ def inspect_video(
         upload_date = f"{upload_date[:4]}-{upload_date[4:6]}-{upload_date[6:]}"
 
     transcript = fetch_transcript_data(vid_id, info)
+    comments = fetch_comments_data(url, max_comments=50, cookies_path=cookies_path, is_cancelled=is_cancelled) if fetch_comments else []
 
     return {
         'id': vid_id,
@@ -636,6 +684,8 @@ def inspect_video(
         'description': description,
         'transcript': transcript,
         'has_transcript': len(transcript) > 0,
+        'comments': comments,
+        'comment_count': len(comments),
     }
 
 def generate_metadata_document(info: dict[str, Any], output_dir: str) -> dict[str, str]:
@@ -732,6 +782,19 @@ TRANSCRIPT:
 
     return {"md": md_path, "txt": txt_path}
 
+
+def generate_json_document(info: dict[str, Any], output_dir: str) -> str:
+    """Saves complete video data, transcript, comments, and stats into a clean formatted JSON file."""
+    os.makedirs(output_dir, exist_ok=True)
+    clean_title = sanitize_filename(info.get('title', 'YouTube_Video'))
+    vid_id = info.get('id') or "video"
+    json_path = os.path.join(output_dir, f"{clean_title} [{vid_id}] [METADATA].json")
+
+    with open(json_path, "w", encoding="utf-8") as f:
+        json.dump(info, f, indent=2, ensure_ascii=False)
+
+    return json_path
+
 def resolve_video_format_string(resolution: str = "best") -> str:
     """Resolve format selector string based on chosen resolution."""
     formats = {
@@ -756,14 +819,17 @@ def download_media_bundle(
     download_video: bool = True,
     download_audio: bool = True,
     download_doc: bool = True,
+    download_json: bool = False,
     video_resolution: str = "best",
     audio_format: str = "mp3",
     audio_bitrate: str = "192",
+    start_time: float | None = None,
+    end_time: float | None = None,
     cookies_path: str | None = None,
     progress_hook: Callable[[dict], None] | None = None,
     is_cancelled: Callable[[], bool] | None = None,
 ) -> dict[str, Any]:
-    """Downloads requested components: Video, Audio, and/or Metadata Document."""
+    """Downloads requested components: Video, Audio, Metadata Document, and/or JSON."""
     target_dir = os.path.abspath(output_dir or config.absolute_download_dir)
     os.makedirs(target_dir, exist_ok=True)
 
@@ -783,6 +849,7 @@ def download_media_bundle(
         'video_file': None,
         'audio_file': None,
         'doc_files': None,
+        'json_file': None,
         'info': None,
     }
 
@@ -802,7 +869,7 @@ def download_media_bundle(
     clean_title = sanitize_filename(info['title'])
     vid_id = info.get('id') or extract_video_id(url) or "video"
 
-    # Step 2: Generate Metadata Document
+    # Step 2: Generate Metadata Document & JSON
     if is_cancelled and is_cancelled():
         clean_leftover_partial_files(target_dir, vid_id)
         raise DownloadCancelled("Task was cancelled by user")
@@ -813,14 +880,24 @@ def download_media_bundle(
         docs = generate_metadata_document(info, target_dir)
         results['doc_files'] = docs
 
+    if download_json:
+        if progress_hook:
+            progress_hook({'phase': 'json', 'message': 'Generating JSON metadata & transcript bundle...'})
+        json_file_path = generate_json_document(info, target_dir)
+        results['json_file'] = json_file_path
+
     # Step 3: Download Video (MP4)
     if is_cancelled and is_cancelled():
         clean_leftover_partial_files(target_dir, vid_id)
         raise DownloadCancelled("Task was cancelled by user")
 
+    is_snippet = (start_time is not None and start_time >= 0) or (end_time is not None and end_time > 0)
+    clip_suffix = f" [CLIP {int(start_time or 0)}s-{int(end_time or 0)}s]" if is_snippet else ""
+
     if download_video:
+        phase_label = f'Downloading Video Snippet ({int(start_time or 0)}s-{int(end_time or 0)}s)' if is_snippet else f'Downloading Video ({video_resolution})'
         if progress_hook:
-            progress_hook({'phase': 'video', 'message': f'Downloading Video ({video_resolution})...'})
+            progress_hook({'phase': 'video', 'message': f'{phase_label}...'})
 
         def yt_progress_video(d):
             if is_cancelled and is_cancelled():
@@ -838,16 +915,20 @@ def download_media_bundle(
         video_opts = get_base_ydl_opts(cookies_path)
         video_opts.update({
             'format': video_fmt,
-            'outtmpl': os.path.join(target_dir, f"{clean_title} [{vid_id}] [VIDEO].%(ext)s"),
+            'outtmpl': os.path.join(target_dir, f"{clean_title} [{vid_id}]{clip_suffix} [VIDEO].%(ext)s"),
             'merge_output_format': 'mp4',
             'noplaylist': True,
             'progress_hooks': [yt_progress_video],
         })
 
+        if is_snippet:
+            video_opts['download_ranges'] = yt_dlp.utils.download_range_func(None, [(start_time or 0.0, end_time)])
+            video_opts['force_keyframes_at_cuts'] = True
+
         try:
             with yt_dlp.YoutubeDL(video_opts) as ydl:
                 ydl.download([url])
-                results['video_file'] = os.path.join(target_dir, f"{clean_title} [{vid_id}] [VIDEO].mp4")
+                results['video_file'] = os.path.join(target_dir, f"{clean_title} [{vid_id}]{clip_suffix} [VIDEO].mp4")
         except DownloadCancelled:
             clean_leftover_partial_files(target_dir, vid_id)
             raise
@@ -861,10 +942,11 @@ def download_media_bundle(
         codec = audio_format.lower() if audio_format.lower() in ["mp3", "wav", "m4a"] else "mp3"
         bitrate = audio_bitrate if audio_bitrate in ["128", "192", "320"] else "192"
 
+        audio_msg = f'Extracting standalone Audio Snippet to {codec.upper()} ({bitrate}k)...' if is_snippet else f'Extracting standalone Audio to {codec.upper()} ({bitrate}k)...'
         if progress_hook:
             progress_hook({
                 'phase': 'audio',
-                'message': f'Extracting standalone Audio to {codec.upper()} ({bitrate}k)...'
+                'message': audio_msg
             })
 
         def yt_progress_audio(d):
@@ -882,7 +964,7 @@ def download_media_bundle(
         audio_opts = get_base_ydl_opts(cookies_path)
         audio_opts.update({
             'format': 'bestaudio/best',
-            'outtmpl': os.path.join(target_dir, f"{clean_title} [{vid_id}] [AUDIO].%(ext)s"),
+            'outtmpl': os.path.join(target_dir, f"{clean_title} [{vid_id}]{clip_suffix} [AUDIO].%(ext)s"),
             'noplaylist': True,
             'progress_hooks': [yt_progress_audio],
             'postprocessors': [{
@@ -892,10 +974,14 @@ def download_media_bundle(
             }],
         })
 
+        if is_snippet:
+            audio_opts['download_ranges'] = yt_dlp.utils.download_range_func(None, [(start_time or 0.0, end_time)])
+            audio_opts['force_keyframes_at_cuts'] = True
+
         try:
             with yt_dlp.YoutubeDL(audio_opts) as ydl:
                 ydl.download([url])
-                results['audio_file'] = os.path.join(target_dir, f"{clean_title} [{vid_id}] [AUDIO].{codec}")
+                results['audio_file'] = os.path.join(target_dir, f"{clean_title} [{vid_id}]{clip_suffix} [AUDIO].{codec}")
         except DownloadCancelled:
             clean_leftover_partial_files(target_dir, vid_id)
             raise

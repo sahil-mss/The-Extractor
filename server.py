@@ -194,14 +194,19 @@ cleanup_thread.start()
 # Pydantic Request Models
 class InspectRequest(BaseModel):
     url: str
+    fetch_comments: bool = False
 
 class BaseMediaRequest(BaseModel):
     download_video: bool = config.defaults.download_video
     download_audio: bool = config.defaults.download_audio
     download_doc: bool = config.defaults.download_doc
+    download_json: bool = False
     video_resolution: str = config.defaults.video_resolution
     audio_format: str = config.defaults.audio_format
     audio_bitrate: str = config.defaults.audio_bitrate
+    start_time: float | None = None
+    end_time: float | None = None
+    output_dir: str | None = None
 
     @field_validator("video_resolution")
     @classmethod
@@ -229,8 +234,10 @@ class BaseMediaRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_at_least_one_output(self) -> "BaseMediaRequest":
-        if not (self.download_video or self.download_audio or self.download_doc):
-            raise ValueError("At least one output option (video, audio, or metadata document) must be enabled")
+        if not (self.download_video or self.download_audio or self.download_doc or self.download_json):
+            raise ValueError("At least one output option (video, audio, metadata document, or JSON) must be enabled")
+        if self.start_time is not None and self.end_time is not None and self.end_time <= self.start_time:
+            raise ValueError("Snippet end_time must be greater than start_time")
         return self
 
 
@@ -330,7 +337,7 @@ def api_inspect(req: InspectRequest, authorized: bool = Depends(verify_api_key))
             raise HTTPException(status_code=500, detail="Failed to inspect playlist. Check server logs.") from e
 
     try:
-        data = downloader.inspect_video(url)
+        data = downloader.inspect_video(url, fetch_comments=req.fetch_comments)
         return {"status": "success", "is_playlist": False, "data": data}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -339,6 +346,22 @@ def api_inspect(req: InspectRequest, authorized: bool = Depends(verify_api_key))
     except Exception as e:
         logger.error(f"Inspect error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal inspection error. Check server logs.") from e
+
+@app.post("/api/comments")
+def api_get_comments(req: InspectRequest, max_comments: int = 50, authorized: bool = Depends(verify_api_key)):
+    """Fetch user comments for searching and filtering."""
+    url = req.url.strip()
+    valid, err_msg = downloader.is_valid_youtube_url(url)
+    if not valid:
+        raise HTTPException(status_code=400, detail=err_msg)
+
+    try:
+        limit = max(5, min(max_comments, 100))
+        comments = downloader.fetch_comments_data(url, max_comments=limit)
+        return {"status": "success", "count": len(comments), "comments": comments}
+    except Exception as e:
+        logger.error(f"Fetch comments error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to fetch comments: {e}") from e
 
 @app.get("/api/check-downloaded")
 def api_check_downloaded(url: str, authorized: bool = Depends(verify_api_key)):
@@ -395,15 +418,22 @@ def run_download_task(task_id: str, req: DownloadRequest):
                 TASKS[task_id]["message"] = "Processing download..."
                 TASKS[task_id]["started_at"] = time.time()
 
+        target_folder = req.output_dir.strip() if (req.output_dir and req.output_dir.strip()) else config.absolute_download_dir
+        if not os.path.isabs(target_folder):
+            target_folder = os.path.abspath(os.path.join(config.absolute_download_dir, target_folder))
+
         results = downloader.download_media_bundle(
             url=req.url,
-            output_dir=config.absolute_download_dir,
+            output_dir=target_folder,
             download_video=req.download_video,
             download_audio=req.download_audio,
             download_doc=req.download_doc,
+            download_json=req.download_json,
             video_resolution=req.video_resolution,
             audio_format=req.audio_format,
             audio_bitrate=req.audio_bitrate,
+            start_time=req.start_time,
+            end_time=req.end_time,
             progress_hook=progress_callback,
             is_cancelled=is_cancelled_check,
         )
@@ -602,9 +632,11 @@ def api_batch_download(req: BatchDownloadRequest, authorized: bool = Depends(ver
                 download_video=req.download_video,
                 download_audio=req.download_audio,
                 download_doc=req.download_doc,
+                download_json=req.download_json,
                 video_resolution=req.video_resolution,
                 audio_format=req.audio_format,
                 audio_bitrate=req.audio_bitrate,
+                output_dir=req.output_dir,
             )
             TASKS[tid] = {
                 "task_id": tid,
