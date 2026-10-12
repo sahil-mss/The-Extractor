@@ -10,7 +10,7 @@ readme = "README.md"
 authors = [{ name = "Muhammed Sahil Subair" }]
 license = "MIT"
 license-files = ["LICENSE"]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.110.0,<1.0.0",
     "uvicorn[standard]>=0.28.0,<1.0.0",
@@ -43,7 +43,7 @@ web = ["*"]
 
 [tool.ruff]
 line-length = 120
-target-version = "py310"
+target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP"]

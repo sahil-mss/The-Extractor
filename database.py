@@ -1,6 +1,6 @@
 import os
 import sqlite3
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from config import config
@@ -93,7 +93,7 @@ def record_task_completed(
         status = status_override
     else:
         status = "completed" if not error_message else "error"
-    completed_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    completed_at = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
 
     doc_files = results.get("doc_files") or {}
     md_path = doc_files.get("md") if isinstance(doc_files, dict) else None
@@ -252,7 +252,7 @@ def apply_history_retention(
     with get_db_connection() as conn:
         # 1. Delete records older than retention_days
         if ret_days and ret_days > 0:
-            cutoff = datetime.now(timezone.utc) - timedelta(days=ret_days)
+            cutoff = datetime.now(UTC) - timedelta(days=ret_days)
             cutoff_str = cutoff.strftime("%Y-%m-%d %H:%M:%S")
             cur = conn.execute(
                 "DELETE FROM extraction_history WHERE created_at < ?",
