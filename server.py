@@ -70,15 +70,65 @@ TASKS: dict[str, dict[str, Any]] = {}
 CANCELLED_TASKS: set[str] = set()
 executor = ThreadPoolExecutor(max_workers=config.processing.max_concurrent_downloads)
 
+# In-memory auth failure tracker protected by lock: ip -> (failure_timestamps, blocked_until)
+AUTH_FAILURES_LOCK = threading.Lock()
+AUTH_FAILURES: dict[str, list[float]] = {}
+AUTH_BLOCKED_UNTIL: dict[str, float] = {}
+
+def get_client_ip(request: Request) -> str:
+    """Extract client IP, preferring X-Forwarded-For if behind a reverse proxy."""
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+def check_auth_throttle(ip: str, now: float) -> None:
+    """Raise 429 if IP is currently throttled due to excessive auth failures."""
+    blocked_until = AUTH_BLOCKED_UNTIL.get(ip, 0.0)
+    if now < blocked_until:
+        retry_after = int(blocked_until - now)
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many failed authentication attempts. Please try again in {retry_after} seconds.",
+            headers={"Retry-After": str(max(1, retry_after))},
+        )
+
+def record_auth_failure(ip: str, now: float) -> None:
+    """Record an authentication failure for IP. Block for 15 minutes if 10 failures in 5 minutes."""
+    history = [t for t in AUTH_FAILURES.get(ip, []) if (now - t) <= 300.0]
+    history.append(now)
+    AUTH_FAILURES[ip] = history
+    if len(history) >= 10:
+        AUTH_BLOCKED_UNTIL[ip] = now + 900.0  # 15 minutes block
+        AUTH_FAILURES[ip] = []
+
 def verify_api_key(request: Request, x_api_key: str | None = Header(None)):
-    """Verify API key if configured, or require it for non-localhost if configured using constant-time comparison."""
+    """Verify API key if configured, or require it for non-localhost if configured using constant-time comparison and rate limiting."""
     must_require = bool(config.app.api_key) or (
         is_non_localhost(config.app.host) and config.security.require_api_key_for_non_localhost
     )
 
     if must_require:
-        if not x_api_key or not hmac.compare_digest(x_api_key.encode("utf-8"), config.app.api_key.encode("utf-8")):
+        client_ip = get_client_ip(request)
+        now = time.time()
+        with AUTH_FAILURES_LOCK:
+            check_auth_throttle(client_ip, now)
+
+        is_valid = bool(
+            x_api_key and hmac.compare_digest(x_api_key.encode("utf-8"), config.app.api_key.encode("utf-8"))
+        )
+
+        if not is_valid:
+            with AUTH_FAILURES_LOCK:
+                record_auth_failure(client_ip, now)
+                # If this 10th failure triggered the block, immediately return 429
+                check_auth_throttle(client_ip, now)
             raise HTTPException(status_code=401, detail="Invalid or missing X-API-Key header")
+
+        # On successful auth, clear any failure history for this IP
+        with AUTH_FAILURES_LOCK:
+            AUTH_FAILURES.pop(client_ip, None)
+            AUTH_BLOCKED_UNTIL.pop(client_ip, None)
     return True
 
 # Background thread to clean up completed/failed tasks from memory and time out hung tasks

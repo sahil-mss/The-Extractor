@@ -15,10 +15,16 @@ def reset_server_state():
     with server.TASKS_LOCK:
         server.TASKS.clear()
         server.CANCELLED_TASKS.clear()
+    with server.AUTH_FAILURES_LOCK:
+        server.AUTH_FAILURES.clear()
+        server.AUTH_BLOCKED_UNTIL.clear()
     yield
     with server.TASKS_LOCK:
         server.TASKS.clear()
         server.CANCELLED_TASKS.clear()
+    with server.AUTH_FAILURES_LOCK:
+        server.AUTH_FAILURES.clear()
+        server.AUTH_BLOCKED_UNTIL.clear()
 
 def test_startup_security_validation():
     # 1. Non-localhost (0.0.0.0 and LAN IP) without API key must raise RuntimeError

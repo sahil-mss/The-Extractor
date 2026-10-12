@@ -117,3 +117,44 @@ def test_api_history_search(tmp_path):
 
     res_empty = client.get("/api/history?search=NonExistentKeyword")
     assert len(res_empty.json()["history"]) == 0
+
+
+def test_auth_failure_throttle(monkeypatch):
+    import server
+    from config import config
+
+    monkeypatch.setattr(config.app, "api_key", "secret-test-key")
+
+    with server.AUTH_FAILURES_LOCK:
+        server.AUTH_FAILURES.clear()
+        server.AUTH_BLOCKED_UNTIL.clear()
+
+    ip_headers = {"X-Forwarded-For": "203.0.113.42"}
+
+    # First 9 failed attempts should return 401
+    for _ in range(9):
+        resp = client.get("/api/config", headers={"X-API-Key": "wrong-key", **ip_headers})
+        assert resp.status_code == 401
+
+    # 10th failed attempt triggers throttle and returns 429
+    resp_10 = client.get("/api/config", headers={"X-API-Key": "wrong-key", **ip_headers})
+    assert resp_10.status_code == 429
+    assert "Too many failed authentication attempts" in resp_10.json()["detail"]
+    assert "Retry-After" in resp_10.headers
+
+    # Subsequent attempt within 15 minutes is still throttled with 429 even if key is correct or wrong
+    resp_subsequent = client.get("/api/config", headers={"X-API-Key": "secret-test-key", **ip_headers})
+    assert resp_subsequent.status_code == 429
+
+    # Another IP address is not affected
+    resp_other_ip = client.get(
+        "/api/config",
+        headers={"X-API-Key": "secret-test-key", "X-Forwarded-For": "198.51.100.10"}
+    )
+    assert resp_other_ip.status_code == 200
+
+    # Cleanup
+    with server.AUTH_FAILURES_LOCK:
+        server.AUTH_FAILURES.clear()
+        server.AUTH_BLOCKED_UNTIL.clear()
+
