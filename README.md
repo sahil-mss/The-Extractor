@@ -27,10 +27,13 @@
   - [Audacity & System Integration](#audacity--system-integration)
 - [Configuration Reference (`config.yaml`)](#configuration-reference-configyaml)
 - [Cookies & Age-Restricted Videos](#cookies--age-restricted-videos)
+- [YouTube Needs a JavaScript Runtime](#youtube-needs-a-javascript-runtime)
+- [Responsible Use](#responsible-use)
+- [Hosting Beyond Localhost](#hosting-beyond-localhost)
 - [CLI / Standalone Mode](#cli--standalone-mode)
 - [REST API Reference](#rest-api-reference)
-- [Testing & Quality Assurance](#testing--quality-assurance)
 - [Troubleshooting & FAQs](#troubleshooting--faqs)
+- [Testing & Quality Assurance](#testing--quality-assurance)
 
 ---
 
@@ -351,18 +354,101 @@ The Extractor automatically detects installed runtimes and passes them to yt-dlp
 
 ---
 
+## Responsible Use
+
+The Extractor is designed and intended strictly for **personal, research, educational, and authorized media workflows**. When using this software:
+- **Respect Copyright & Ownership**: Only download media that you own, have explicit permission to access, or that is made available under permissive licenses (such as Creative Commons) or fair dealing/fair use provisions applicable in your jurisdiction.
+- **Platform Terms of Service**: You are responsible for ensuring that your usage complies with YouTube's Terms of Service and any other applicable platform agreements.
+- **No Warranty**: The software is provided "as is" under the MIT License, without warranty of any kind, express or implied. The authors and maintainers assume no liability for misuse, copyright infringement, account bans, or data loss resulting from the use of this tool.
+
+---
+
+## Hosting Beyond Localhost
+
+If you plan to expose The Extractor to your local area network (LAN), virtual private network (VPN), or a public server / VPS, follow these production deployment guidelines:
+
+### 1. Always Run Behind a TLS Reverse Proxy
+Do not expose the raw Uvicorn server directly to the public internet on HTTP. Terminate TLS using a reverse proxy such as **Caddy** or **Nginx**.
+
+#### Example Caddy Configuration (`Caddyfile`)
+```caddy
+media.yourdomain.com {
+    reverse_proxy 127.0.0.1:8000
+}
+```
+
+#### Example Nginx Configuration (`/etc/nginx/sites-available/extractor`)
+```nginx
+server {
+    listen 80;
+    server_name media.yourdomain.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name media.yourdomain.com;
+
+    ssl_certificate /etc/letsencrypt/live/media.yourdomain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/media.yourdomain.com/privkey.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+### 2. Always Configure an API Key
+When hosting beyond `localhost` / `127.0.0.1`, The Extractor requires authentication to protect your disk storage and server resources:
+```bash
+export EXTRACTOR_API_KEY="your-strong-random-api-key-here"
+```
+Or in `config.yaml`:
+```yaml
+app:
+  api_key: "your-strong-random-api-key-here"
+```
+Clients must provide this key via the `X-API-Key` HTTP header.
+
+### 3. Run a Single Process (Do Not Use `--workers N`)
+**Important**: Task queues, live download progress polling, active cancellations, and rate limiters maintain synchronized in-memory state. **Do not run Uvicorn with multiple workers (`--workers N`)**, as requests routed across distinct processes will not share task state. Use the default single worker architecture:
+```bash
+extractor --host 0.0.0.0 --port 8000
+```
+
+---
+
 ## Troubleshooting & yt-dlp Breakage Runbook
 
-### "Video not available" or Extraction Failures
+### 1. Bot Checks & Cloud / VPS IP Blocks
+Data center and cloud provider IP blocks (AWS, GCP, DigitalOcean, Hetzner, etc.) are heavily throttled or completely blocked by YouTube's anti-bot protections (`Sign in to confirm you're not a bot` or HTTP 429).
+- **Solution**: Export valid browser cookies into `cookies.txt` (see [Cookies & Age-Restricted Videos](#cookies--age-restricted-videos)) from an active, non-datacenter residential session.
+- Run The Extractor on a residential network or route traffic through a residential proxy or VPN if hosting on a VPS.
+
+### 2. Cookie Expiry & Stale Sessions
+If previously functioning downloads begin failing with authentication or sign-in prompts:
+- YouTube session cookies expire periodically or are invalidated upon logging out of your browser.
+- Refresh your `cookies.txt` file by re-exporting it from your active browser session and replacing the file on the server.
+
+### 3. JavaScript Runtime Missing or Broken
+- YouTube challenge solving requires `yt-dlp-ejs` and a working JavaScript runtime.
+- If extractions fail with "video not available" or challenge execution errors, ensure `deno`, `node`, `bun`, or `quickjs` is installed and reachable on your `PATH`.
+- Check `/api/config` or the dashboard notification banner to verify that `js_runtime_available: true`.
+
+### 4. "Video not available" or Extraction Failures
 If you encounter errors stating that a video is unavailable, sign-in is required, or extraction failed on a valid public video:
 1. **Missing JavaScript Runtime**: Check if a JavaScript engine (Deno or Node.js) is installed. Without a JS runtime, modern YouTube challenges fail and report the video as unavailable. Check the banner in the dashboard or terminal startup log.
 2. **Outdated yt-dlp**: YouTube regularly adjusts player mechanisms. Update yt-dlp via:
    ```bash
    pip install -U "yt-dlp[default]"
    ```
-3. **Bot Detection or Geo-blocking**: Use `cookies.txt` (see [Cookies & Age-Restricted Videos](#cookies--age-restricted-videos)) to authenticate requests from your browser session.
+3. **Bot Detection or Geo-blocking**: Use `cookies.txt` to authenticate requests from your browser session.
 
-### Downloads suddenly failing?
+### 5. Downloads suddenly failing?
 YouTube frequently changes its internal player APIs, which can temporarily break video or audio extraction.
 If downloads suddenly start failing with extraction errors, upgrade `yt-dlp` to the latest release:
 
