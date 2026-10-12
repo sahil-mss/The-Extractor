@@ -2,7 +2,19 @@
 
 All notable changes to **The Extractor** will be documented in this file.
 
-## [2.6.1] - 2026-10-11
+## [2.7.0] - 2026-10-12
+
+### Features & YouTube Compatibility (P0 & P1)
+- **JavaScript Runtime & EJS Engine Support (P0)**: Updated dependencies to `yt-dlp[default]>=2024.0.0` ensuring `yt-dlp-ejs` is installed; configured `js_runtimes` in `get_base_ydl_opts` to support Deno, Node.js, Bun, and QuickJS for solving YouTube JavaScript challenges; added Node.js to Docker image; implemented `js_runtime_available()` detection with startup banner alerts, `/api/config` reporting, and web UI alerts.
+- **FFmpeg Binary Detection & Health Reporting (P1)**: Implemented `ffmpeg_available() -> bool` checking system `PATH` and platform-specific fallback locations (WinGet, Chocolatey, Scoop, Homebrew); surfaced status via startup banner, `/api/config`, and dashboard alert banner; added unit tests for PATH detection, fallback resolution, and missing states.
+
+### Infrastructure & CI Modernization (P1 & P2)
+- **Python Matrix Modernization (P1)**: Raised `requires-python` to `>=3.11` (given Python 3.10 EOL), updated Ruff lint target to `py311`, aligned Dockerfile base image to `python:3.11-slim`, and expanded CI test matrix to test Python 3.11, 3.12, 3.13, and 3.14 across Ubuntu, macOS, and Windows.
+- **Dependency Hygiene & Dependabot (P2)**: Relaxed `youtube-transcript-api` to `>=1.2.4,<2.0.0` in `pyproject.toml`; configured `.github/dependabot.yml` for weekly updates across `pip`, `docker`, and `github-actions`; added non-blocking CI job testing `pytest -W error::DeprecationWarning` to surface upstream deprecations early.
+- **Comprehensive Documentation Updates (P2)**: Added "Responsible Use" policy, "Hosting Beyond Localhost" deployment guide (with Caddy & Nginx reverse proxy examples and single-worker warnings), and expanded troubleshooting guidelines for cloud/VPS IP bot checks, cookie expiry, and JS runtimes.
+
+### Security & Hardening (P3)
+- **API Key Authentication Failure Throttling (P3)**: Added in-memory per-IP failure tracking with lock protection and `X-Forwarded-For` support; throttles requests with HTTP 429 (`Retry-After: 900`) for 15 minutes upon 10 failed `X-API-Key` attempts within a 5-minute sliding window; added unit tests verifying throttling thresholds and IP isolation.
 
 ### Security & Hardening
 - **URL Validator Parser Bypass Remediation (SEC-01)**: Refactored `downloader.is_valid_youtube_url()` to extract the target hostname strictly via `urllib.parse.urlparse().hostname` (lowercased) rather than parsing `netloc` strings, effectively blocking credential-delimiter bypasses (e.g. `youtube.com:443@127.0.0.1`). Explicitly rejected URLs containing userinfo (`username`/`password`), enforced strict allowlist checks with `host == d or host.endswith("." + d)`, restricted port numbers strictly to `None`, `80`, or `443` with `ValueError` protection, and tightened `downloader.is_playlist_url` from substring checks to exact hostname matching.
