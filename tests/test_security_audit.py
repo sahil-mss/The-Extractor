@@ -33,7 +33,9 @@ def test_startup_security_validation():
     bad_cfg.app.api_key = ""
     bad_cfg.security.require_api_key_for_non_localhost = True
 
-    with pytest.raises(RuntimeError, match="Cannot bind to '0.0.0.0' without an API key configured"):
+    import re
+
+    with pytest.raises(RuntimeError, match=re.escape("Cannot bind to '0.0.0.0' without an API key configured")):
         validate_startup_security(bad_cfg)
 
     lan_cfg = Config()
@@ -41,7 +43,7 @@ def test_startup_security_validation():
     lan_cfg.app.api_key = ""
     lan_cfg.security.require_api_key_for_non_localhost = True
 
-    with pytest.raises(RuntimeError, match="Cannot bind to '192.168.1.50' without an API key configured"):
+    with pytest.raises(RuntimeError, match=re.escape("Cannot bind to '192.168.1.50' without an API key configured")):
         validate_startup_security(lan_cfg)
 
     # 2. Non-localhost with API key must succeed
@@ -62,7 +64,7 @@ def test_startup_security_validation():
     prod_no_key = Config()
     prod_no_key.app.env = "production"
     prod_no_key.app.api_key = ""
-    with pytest.raises(RuntimeError, match="Production mode.*requires an API key"):
+    with pytest.raises(RuntimeError, match=r"Production mode.*requires an API key"):
         validate_startup_security(prod_no_key)
 
     # 5. Production mode with short/weak API key (< 16 chars) must fail (SEC-02)

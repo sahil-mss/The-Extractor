@@ -152,7 +152,7 @@ def main():
     print()
 
     # Pass any extra CLI arguments directly to main.py
-    cmd = [target_python, os.path.join(PROJECT_DIR, "main.py")] + sys.argv[1:]
+    cmd = [target_python, os.path.join(PROJECT_DIR, "main.py"), *sys.argv[1:]]
     try:
         subprocess.run(cmd, cwd=PROJECT_DIR)
     except KeyboardInterrupt:

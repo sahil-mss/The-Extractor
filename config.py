@@ -195,10 +195,9 @@ def load_config(config_path: str | None = None) -> Config:
     if "EXTRACTOR_HOST" in os.environ:
         data.setdefault("app", {})["host"] = os.environ["EXTRACTOR_HOST"]
     if "EXTRACTOR_PORT" in os.environ:
-        try:
+        import contextlib
+        with contextlib.suppress(ValueError):
             data.setdefault("app", {})["port"] = int(os.environ["EXTRACTOR_PORT"])
-        except ValueError:
-            pass
     if "EXTRACTOR_ENV" in os.environ:
         data.setdefault("app", {})["env"] = os.environ["EXTRACTOR_ENV"].strip().lower()
 
@@ -254,7 +253,7 @@ def validate_startup_security(cfg: Config) -> None:
             )
         if is_prod and len(key) < min_len:
             raise RuntimeError(
-                f"Security Error: Non-localhost production binding requires an API key of at least {min_len} characters."
+                f"Security Error: Non-localhost binding in prod requires an API key of at least {min_len} chars."
             )
 
 
@@ -273,7 +272,12 @@ def setup_logging(cfg: Config | None = None) -> logging.Logger:
     app_logger.setLevel(logging.INFO)
 
     # Avoid duplicate handlers if setup_logging is called multiple times
-    if not any(isinstance(h, logging.FileHandler) and getattr(h, "baseFilename", None) == os.path.abspath(log_path) for h in app_logger.handlers):
+    abs_log = os.path.abspath(log_path)
+    has_handler = any(
+        isinstance(h, logging.FileHandler) and getattr(h, "baseFilename", None) == abs_log
+        for h in app_logger.handlers
+    )
+    if not has_handler:
         formatter = logging.Formatter(
             fmt="%(asctime)s [%(levelname)s] %(name)s (%(process)d): %(message)s",
             datefmt="%Y-%m-%d %H:%M:%S"

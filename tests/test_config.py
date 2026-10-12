@@ -62,17 +62,17 @@ def test_audacity_resolver_platform_branches(monkeypatch):
 
     # Windows branch
     monkeypatch.setattr("platform.system", lambda: "Windows")
-    monkeypatch.setattr("os.path.exists", lambda path: True if "Audacity.exe" in path else False)
+    monkeypatch.setattr("os.path.exists", lambda path: "Audacity.exe" in path)
     assert cfg.get_audacity_executable() == r"C:\Program Files\Audacity\Audacity.exe"
 
     # Darwin (macOS) branch
     monkeypatch.setattr("platform.system", lambda: "Darwin")
-    monkeypatch.setattr("os.path.exists", lambda path: True if "Applications/Audacity.app" in path else False)
+    monkeypatch.setattr("os.path.exists", lambda path: "Applications/Audacity.app" in path)
     assert cfg.get_audacity_executable() == "/Applications/Audacity.app/Contents/MacOS/Audacity"
 
     # Linux branch
     monkeypatch.setattr("platform.system", lambda: "Linux")
-    monkeypatch.setattr("os.path.exists", lambda path: True if path == "/usr/bin/audacity" else False)
+    monkeypatch.setattr("os.path.exists", lambda path: path == "/usr/bin/audacity")
     assert cfg.get_audacity_executable() == "/usr/bin/audacity"
 
 

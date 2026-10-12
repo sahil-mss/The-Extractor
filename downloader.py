@@ -1,3 +1,4 @@
+import contextlib
 import ipaddress
 import json
 import os
@@ -129,15 +130,11 @@ def clean_leftover_partial_files(target_dir: str, vid_id: str) -> None:
     """Removes leftover *.part and *.ytdl files for the specified video ID."""
     if not os.path.isdir(target_dir) or not vid_id:
         return
-    try:
+    with contextlib.suppress(Exception):
         for fname in os.listdir(target_dir):
             if vid_id in fname and (fname.endswith(".part") or fname.endswith(".ytdl")):
-                try:
+                with contextlib.suppress(OSError):
                     os.remove(os.path.join(target_dir, fname))
-                except OSError:
-                    pass
-    except Exception:
-        pass
 
 
 def js_runtime_available() -> bool:
@@ -572,9 +569,9 @@ def fetch_comments_data(
 ) -> list[dict[str, Any]]:
     """
     Fetch top user comments for a video using yt-dlp.
-    Returns [{'id': '...', 'author': '...', 'text': '...', 'like_count': 12, 'timestamp': '...', 'author_thumbnail': '...'}]
+    Returns [{'id': '...', 'author': '...', 'text': '...', 'like_count': 12, ...}]
     """
-    valid, err_msg = is_valid_youtube_url(url)
+    valid, _ = is_valid_youtube_url(url)
     if not valid:
         return []
 
@@ -644,10 +641,10 @@ def inspect_video(
             end_time = time.time() + delay
             while time.time() < end_time:
                 if is_cancelled and is_cancelled():
-                    raise DownloadCancelled("Task was cancelled by user")
+                    raise DownloadCancelled("Task was cancelled by user") from e
                 time.sleep(min(0.5, max(0.01, end_time - time.time())))
             if is_cancelled and is_cancelled():
-                raise DownloadCancelled("Task was cancelled by user")
+                raise DownloadCancelled("Task was cancelled by user") from e
     else:
         raise RuntimeError(f"Failed to inspect video after {config.processing.max_retries} attempts: {last_err}")
 
@@ -666,7 +663,11 @@ def inspect_video(
         upload_date = f"{upload_date[:4]}-{upload_date[4:6]}-{upload_date[6:]}"
 
     transcript = fetch_transcript_data(vid_id, info)
-    comments = fetch_comments_data(url, max_comments=50, cookies_path=cookies_path, is_cancelled=is_cancelled) if fetch_comments else []
+    comments = (
+        fetch_comments_data(url, max_comments=50, cookies_path=cookies_path, is_cancelled=is_cancelled)
+        if fetch_comments
+        else []
+    )
 
     return {
         'id': vid_id,
@@ -895,7 +896,11 @@ def download_media_bundle(
     clip_suffix = f" [CLIP {int(start_time or 0)}s-{int(end_time or 0)}s]" if is_snippet else ""
 
     if download_video:
-        phase_label = f'Downloading Video Snippet ({int(start_time or 0)}s-{int(end_time or 0)}s)' if is_snippet else f'Downloading Video ({video_resolution})'
+        phase_label = (
+            f'Downloading Video Snippet ({int(start_time or 0)}s-{int(end_time or 0)}s)'
+            if is_snippet
+            else f'Downloading Video ({video_resolution})'
+        )
         if progress_hook:
             progress_hook({'phase': 'video', 'message': f'{phase_label}...'})
 
@@ -928,7 +933,9 @@ def download_media_bundle(
         try:
             with yt_dlp.YoutubeDL(video_opts) as ydl:
                 ydl.download([url])
-                results['video_file'] = os.path.join(target_dir, f"{clean_title} [{vid_id}]{clip_suffix} [VIDEO].mp4")
+                results['video_file'] = os.path.join(
+                    target_dir, f"{clean_title} [{vid_id}]{clip_suffix} [VIDEO].mp4"
+                )
         except DownloadCancelled:
             clean_leftover_partial_files(target_dir, vid_id)
             raise
@@ -942,7 +949,11 @@ def download_media_bundle(
         codec = audio_format.lower() if audio_format.lower() in ["mp3", "wav", "m4a"] else "mp3"
         bitrate = audio_bitrate if audio_bitrate in ["128", "192", "320"] else "192"
 
-        audio_msg = f'Extracting standalone Audio Snippet to {codec.upper()} ({bitrate}k)...' if is_snippet else f'Extracting standalone Audio to {codec.upper()} ({bitrate}k)...'
+        audio_msg = (
+            f'Extracting standalone Audio Snippet to {codec.upper()} ({bitrate}k)...'
+            if is_snippet
+            else f'Extracting standalone Audio to {codec.upper()} ({bitrate}k)...'
+        )
         if progress_hook:
             progress_hook({
                 'phase': 'audio',
@@ -981,7 +992,9 @@ def download_media_bundle(
         try:
             with yt_dlp.YoutubeDL(audio_opts) as ydl:
                 ydl.download([url])
-                results['audio_file'] = os.path.join(target_dir, f"{clean_title} [{vid_id}]{clip_suffix} [AUDIO].{codec}")
+                results['audio_file'] = os.path.join(
+                    target_dir, f"{clean_title} [{vid_id}]{clip_suffix} [AUDIO].{codec}"
+                )
         except DownloadCancelled:
             clean_leftover_partial_files(target_dir, vid_id)
             raise
@@ -997,10 +1010,7 @@ def download_media_bundle(
 
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        target_url = sys.argv[1].strip()
-    else:
-        target_url = input("Enter YouTube URL or Playlist: ").strip()
+    target_url = sys.argv[1].strip() if len(sys.argv) > 1 else input("Enter YouTube URL or Playlist: ").strip()
 
     if target_url:
         if is_playlist_url(target_url):

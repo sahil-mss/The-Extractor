@@ -1,3 +1,4 @@
+import contextlib
 import os
 import sqlite3
 from datetime import UTC, datetime, timedelta
@@ -47,10 +48,8 @@ def init_db():
         conn.execute("CREATE INDEX IF NOT EXISTS idx_history_lookup ON extraction_history(url, video_id)")
 
         # Migration: Ensure json_path exists in existing databases
-        try:
+        with contextlib.suppress(sqlite3.OperationalError):
             conn.execute("ALTER TABLE extraction_history ADD COLUMN json_path TEXT")
-        except sqlite3.OperationalError:
-            pass  # Column already exists
 
         # Mark any tasks left in 'queued' or 'running' state from previous crash/restart as 'interrupted'
         conn.execute("""
@@ -96,10 +95,7 @@ def record_task_completed(
     error_message: str | None = None,
     status_override: str | None = None,
 ) -> None:
-    if status_override:
-        status = status_override
-    else:
-        status = "completed" if not error_message else "error"
+    status = status_override or ("completed" if not error_message else "error")
     completed_at = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
 
     doc_files = results.get("doc_files") or {}
@@ -290,10 +286,8 @@ def _remove_safe_files(rows: list[sqlite3.Row] | sqlite3.Cursor) -> None:
             except IndexError:
                 continue
             if fpath and is_safe_download_path(fpath) and os.path.exists(fpath):
-                try:
+                with contextlib.suppress(OSError):
                     os.remove(fpath)
-                except OSError:
-                    pass
 
 def delete_history_item(item_id: int, delete_files: bool = False) -> bool:
     with get_db_connection() as conn:

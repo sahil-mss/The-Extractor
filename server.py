@@ -418,7 +418,8 @@ def run_download_task(task_id: str, req: DownloadRequest):
                 TASKS[task_id]["message"] = "Processing download..."
                 TASKS[task_id]["started_at"] = time.time()
 
-        target_folder = req.output_dir.strip() if (req.output_dir and req.output_dir.strip()) else config.absolute_download_dir
+        raw_out = req.output_dir.strip() if req.output_dir else ""
+        target_folder = raw_out if raw_out else config.absolute_download_dir
         if not os.path.isabs(target_folder):
             target_folder = os.path.abspath(os.path.join(config.absolute_download_dir, target_folder))
 
