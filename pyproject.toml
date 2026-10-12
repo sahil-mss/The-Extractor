@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "the-extractor"
-version = "2.6.1"
+version = "2.7.0"
 description = "A modern, cross-platform media downloader, tag inspector, transcript generator, and audio preparation suite"
 readme = "README.md"
 authors = [{ name = "Muhammed Sahil Subair" }]

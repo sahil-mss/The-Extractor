@@ -9,7 +9,43 @@
 
 ---
 
+## 💡 What is this in simple words? (1-Minute Explanation)
+
+Imagine you found a great YouTube video or playlist, and you want:
+- 🎬 The **video file** to watch offline.
+- 🎵 Just the **audio file** (MP3 or WAV) to listen to or edit in music software like Audacity.
+- 📝 The **exact words spoken (transcript)** with clean timestamps so you can read along, take notes, or create summaries.
+- 🏷️ The **hidden tags and keywords** the creator used to rank the video.
+
+**The Extractor** does all of this for you automatically from a clean, beautiful web screen right on your computer. You simply paste a YouTube link, click a button, and it saves everything into your folder.
+
+---
+
+## 🏃 Quick Start (3 Steps for Anyone)
+
+### Step 1: Open your terminal or command prompt
+- **Windows**: Press `Win + R`, type `cmd`, and press Enter.
+- **Mac**: Press `Cmd + Space`, type `Terminal`, and press Enter.
+- **Linux**: Open your regular terminal window.
+
+### Step 2: Install and start
+Run these two commands:
+```bash
+pip install -r requirements.txt
+python main.py
+```
+
+### Step 3: Use it in your browser!
+Your web browser will automatically open to:
+👉 **`http://localhost:8000`**
+
+Paste any YouTube link into the box, click **Inspect & Extract**, and you're done!
+
+---
+
 ## 📑 Table of Contents
+- [What is this?](#-what-is-this-in-simple-words-1-minute-explanation)
+- [Quick 3-Step Start](#-quick-start-3-steps-for-anyone)
 - [Overview](#overview)
 - [Key Features](#key-features)
 - [Quick Start](#quick-start)
@@ -221,34 +257,43 @@ The Extractor/
 
 ## User Guide & Workflows
 
-### Single Video Mode
-1. Ensure the **Single Video** tab is active.
-2. Paste any YouTube URL (Standard, Short, or `youtu.be` link) and click **Inspect & Extract** (or press Enter).
-3. Review the video preview, view counts, hidden tags, and timestamped speech-to-text transcript.
-4. Select your preferred **Video Quality** (e.g., 1080p) and **Audio Quality** (e.g., MP3 320k).
-5. Choose what packages to download (**Video**, **Audio**, **Metadata & Transcript**).
-6. Click **Start Extraction & Download** and monitor the live progress bar, speed, and ETA.
+### 🎥 1. How to Download a Single Video (Step-by-Step)
+1. **Paste URL**: Copy the link of any YouTube video or YouTube Short from your browser and paste it into the search box.
+2. **Inspect**: Click the blue **Inspect & Extract** button (or press Enter on your keyboard).
+3. **Choose Options**:
+   - 📺 **Video Quality**: Pick `Best (HD/4K)` or a specific resolution like `1080p` or `720p`.
+   - 🎧 **Audio Quality**: Pick your audio format, such as `MP3 (320k - Best Quality)` or `WAV (Lossless)`.
+   - 📦 **Checkboxes**: Leave **Video**, **Audio**, or **Metadata** checked depending on what you want to save.
+4. **Download**: Click **Start Extraction & Download**.
+5. **Watch Progress**: You will see a live progress bar showing percentage, download speed, and estimated time remaining. When finished, your files will be safely stored in your `downloads/` folder!
 
-### Batch & Playlist Mode
-1. Click the **Batch & Playlists** tab.
-2. Paste multiple video URLs (separated by newlines or commas) or a YouTube playlist URL.
+---
+
+### 📚 2. How to Download a Playlist or Multiple Links at Once
+1. Click the **Batch & Playlists** tab at the top.
+2. Paste multiple video links (one link per line) OR paste a single YouTube playlist link (e.g., `https://www.youtube.com/playlist?list=...`).
 3. Click **Queue Batch Download**.
-4. The background queue will sequentially process each video without freezing the UI.
-5. You can dismiss finished items or monitor errors if any single item fails.
+4. The system will automatically download every video one-by-one in the background without slowing down your computer.
 
-### Format & Quality Customization
-Choose between:
-- **Video**: `Best Available (HD/4K)`, `1080p Full HD`, `720p HD`, or `480p SD`.
-- **Audio**: `MP3 (320 kbps - Studio)`, `MP3 (192 kbps - Standard)`, `MP3 (128 kbps - Voice)`, `WAV (Lossless PCM)`, or `M4A (AAC)`.
+---
 
-### Persistent Job History
-- Click the **📜 History** button in the header at any time.
-- View past extractions, statuses (`completed`, `queued`, `error`), channels, and timestamps.
-- Remove individual records or clear all history.
+### 🎨 3. What Format Should I Pick?
+- **For watching videos**: Choose `Best Available (HD/4K)` or `1080p Full HD`.
+- **For listening to music or podcasts on your phone/car**: Choose `MP3 (320 kbps - Studio)`.
+- **For music editing or recording software (Audacity, FL Studio, Premiere)**: Choose `WAV (Lossless PCM)`.
+- **For reading transcripts or notes**: Check the `Document & Transcript` box to get a `.md` and `.txt` file containing all spoken words and timestamps!
 
-### Audacity & System Integration
-- **Open Downloads Folder**: Opens the local output folder in File Explorer (Windows), Finder (macOS), or your default file manager (Linux).
-- **Edit Audio in Audacity**: Launches Audacity directly with the newly downloaded audio track ready for noise reduction, equalization, and editing.
+---
+
+### 📜 4. Job History
+- Click the **📜 History** button in the top right corner anytime.
+- You can view everything you have previously downloaded, see file locations on your hard drive, or remove past records.
+
+---
+
+### 🎛️ 5. Audacity & Folder Shortcuts
+- **Open Downloads Folder**: Opens your computer's folder directly to show you your saved files.
+- **Edit in Audacity**: If you have Audacity installed, clicking this button automatically launches Audacity with your downloaded audio file loaded into the editor!
 
 ---
 
