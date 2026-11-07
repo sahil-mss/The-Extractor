@@ -26,7 +26,10 @@ ENV EXTRACTOR_CONFIG=config.yaml \
     EXTRACTOR_DOWNLOAD_DIR=/app/downloads \
     EXTRACTOR_DATA_DIR=/app/data \
     EXTRACTOR_HOST=0.0.0.0 \
-    EXTRACTOR_PORT=8000
+    EXTRACTOR_PORT=8000 \
+    HOME=/tmp \
+    DENO_DIR=/tmp/.deno \
+    PIP_CACHE_DIR=/tmp/.pip-cache
 
 # Create non-root user and setup directories
 RUN useradd -m -u 1000 appuser && \

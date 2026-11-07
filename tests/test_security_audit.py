@@ -749,6 +749,19 @@ def test_batch_executor_submit_failure_rollback(monkeypatch):
         assert row is None
 
 
+def test_dockerfile_custom_uid_environment():
+    dockerfile_path = os.path.join(os.path.dirname(__file__), "..", "Dockerfile")
+    assert os.path.exists(dockerfile_path)
+    with open(dockerfile_path, encoding="utf-8") as f:
+        content = f.read()
+
+    # Ensure writable directories for arbitrary UID execution
+    assert "HOME=/tmp" in content
+    assert "DENO_DIR=/tmp/.deno" in content
+    assert "PIP_CACHE_DIR=/tmp/.pip-cache" in content
+
+
+
 
 
 
