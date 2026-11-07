@@ -208,10 +208,7 @@ def get_detected_js_runtime() -> dict[str, Any]:
             m = re.search(pattern, out, re.MULTILINE)
             version_str = m.group(1) if m else "unknown"
             vt_match = re.search(r"(\d+)(?:\.(\d+))?(?:\.(\d+))?", version_str)
-            if vt_match:
-                vt = tuple(int(x) if x is not None else 0 for x in vt_match.groups())
-            else:
-                vt = (0, 0, 0)
+            vt = tuple(int(x) if x is not None else 0 for x in vt_match.groups()) if vt_match else (0, 0, 0)
             is_supported = vt >= min_ver
             return {
                 "available": is_supported,
