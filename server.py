@@ -5,6 +5,7 @@ import os
 import platform
 import shutil
 import subprocess
+import sys
 import threading
 import time
 import uuid
@@ -978,23 +979,59 @@ def api_clear_history(delete_files: bool = False, authorized: bool = Depends(ver
 
 # OS Integration Endpoints
 @app.post("/api/browse-folder")
-def api_browse_folder(authorized: bool = Depends(verify_api_key)):
-    """Opens a native OS folder picker dialog on the host PC and returns the selected directory."""
+def api_browse_folder(request: Request, authorized: bool = Depends(verify_api_key)):
+    """Opens a native OS folder picker dialog via a subprocess on loopback hosts only.
+
+    Runs in a separate subprocess to avoid blocking worker threads or aborting on macOS main thread.
+    Enforces a 120-second timeout.
+    """
+    client_ip = get_client_ip(request)
+    # Allow only loopback host
+    is_loopback = False
+    if client_ip:
+        ch = client_ip.strip().lower()
+        if ch in ("127.0.0.1", "localhost", "::1", "testclient"):
+            is_loopback = True
+        else:
+            try:
+                is_loopback = ipaddress.ip_address(ch).is_loopback
+            except ValueError:
+                is_loopback = False
+
+    if not is_loopback:
+        raise HTTPException(status_code=403, detail="Folder picker dialog is only accessible from localhost")
+
+    default_dir = config.absolute_download_dir
+    script = (
+        "import os, sys\n"
+        "try:\n"
+        "    import tkinter as tk\n"
+        "    from tkinter import filedialog\n"
+        "    root = tk.Tk()\n"
+        "    root.withdraw()\n"
+        "    root.attributes('-topmost', True)\n"
+        "    init_dir = sys.argv[1] if len(sys.argv) > 1 and os.path.exists(sys.argv[1]) else None\n"
+        "    folder = filedialog.askdirectory(initialdir=init_dir, title='Select Download Directory')\n"
+        "    root.destroy()\n"
+        "    print(folder or '')\n"
+        "except Exception:\n"
+        "    print('')\n"
+    )
+
     selected_dir = ""
     try:
-        import tkinter as tk
-        from tkinter import filedialog
-        root = tk.Tk()
-        root.withdraw()
-        root.attributes("-topmost", True)
-        default_dir = config.absolute_download_dir
-        selected_dir = filedialog.askdirectory(
-            initialdir=default_dir if os.path.exists(default_dir) else None,
-            title="Select Download Directory"
+        res = subprocess.run(
+            [sys.executable, "-c", script, default_dir],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
         )
-        root.destroy()
+        selected_dir = (res.stdout or "").strip()
+    except subprocess.TimeoutExpired:
+        logger.warning("Folder picker dialog timed out after 120 seconds")
     except Exception as e:
-        logger.warning(f"Native browse-folder dialog not available or failed: {e}")
+        logger.warning(f"Native browse-folder dialog subprocess failed: {e}")
 
     return {"status": "success", "folder": selected_dir or ""}
 

@@ -393,3 +393,30 @@ def test_snippet_clips_validation_and_range_func(monkeypatch):
     assert ranges[0]["start_time"] == 30.0
     assert ranges[0]["end_time"] == float("inf")
 
+
+def test_api_browse_folder_subprocess_and_permissions(monkeypatch):
+    import subprocess
+    from unittest.mock import MagicMock
+
+    # 1. Loopback client succeeds and runs via subprocess
+    called_args = []
+
+    def mock_run(args, **kwargs):
+        called_args.append(args)
+        assert kwargs.get("timeout") == 120
+        return MagicMock(stdout="/home/user/custom_downloads\n", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", mock_run)
+    resp = client.post("/api/browse-folder")
+    assert resp.status_code == 200
+    assert resp.json()["folder"] == "/home/user/custom_downloads"
+    assert len(called_args) == 1
+    assert "-c" in called_args[0]
+
+    # 2. Non-loopback client is rejected with 403
+    from config import config
+    monkeypatch.setattr(config.security, "trusted_proxies", ["testclient"])
+    resp_remote = client.post("/api/browse-folder", headers={"X-Forwarded-For": "203.0.113.195"})
+    assert resp_remote.status_code == 403
+    assert "only accessible from localhost" in resp_remote.json()["detail"]
+
