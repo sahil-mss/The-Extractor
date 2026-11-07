@@ -4,6 +4,7 @@ import os
 import platform
 import shutil
 import sys
+from logging.handlers import RotatingFileHandler
 
 import yaml
 from pydantic import BaseModel, Field
@@ -278,7 +279,7 @@ def setup_logging(cfg: Config | None = None) -> logging.Logger:
     # Avoid duplicate handlers if setup_logging is called multiple times
     abs_log = os.path.abspath(log_path)
     has_handler = any(
-        isinstance(h, logging.FileHandler) and getattr(h, "baseFilename", None) == abs_log
+        isinstance(h, RotatingFileHandler) and getattr(h, "baseFilename", None) == abs_log
         for h in app_logger.handlers
     )
     if not has_handler:
@@ -287,7 +288,9 @@ def setup_logging(cfg: Config | None = None) -> logging.Logger:
             datefmt="%Y-%m-%d %H:%M:%S"
         )
         try:
-            file_handler = logging.FileHandler(log_path, encoding="utf-8")
+            file_handler = RotatingFileHandler(
+                log_path, maxBytes=5_000_000, backupCount=3, encoding="utf-8"
+            )
             file_handler.setLevel(logging.INFO)
             file_handler.setFormatter(formatter)
             app_logger.addHandler(file_handler)
@@ -295,7 +298,7 @@ def setup_logging(cfg: Config | None = None) -> logging.Logger:
             # Also attach to uvicorn loggers so HTTP access and errors persist to log file
             for uvicorn_log_name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
                 u_log = logging.getLogger(uvicorn_log_name)
-                if not any(isinstance(h, logging.FileHandler) for h in u_log.handlers):
+                if not any(isinstance(h, RotatingFileHandler) for h in u_log.handlers):
                     u_log.addHandler(file_handler)
         except Exception as e:
             print(f"[!] Warning: Could not initialize log file at {log_path}: {e}", file=sys.stderr)

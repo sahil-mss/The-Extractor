@@ -134,3 +134,21 @@ def test_fragment_threads_config(monkeypatch):
     opts = downloader.get_base_ydl_opts()
     assert opts["concurrent_fragment_downloads"] == 8
 
+
+def test_logging_rotation_setup(tmp_path):
+    from logging.handlers import RotatingFileHandler
+
+    from config import Config, setup_logging
+
+    log_file = tmp_path / "test_rotating.log"
+    cfg = Config()
+    cfg.paths.log_file = str(log_file)
+
+    app_logger = setup_logging(cfg)
+    handlers = [h for h in app_logger.handlers if isinstance(h, RotatingFileHandler)]
+    assert len(handlers) >= 1
+    rfh = handlers[0]
+    assert rfh.maxBytes == 5_000_000
+    assert rfh.backupCount == 3
+
+
