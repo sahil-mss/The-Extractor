@@ -2,6 +2,20 @@
 
 All notable changes to **The Extractor** will be documented in this file.
 
+## [2.8.1] - 2026-11-08
+
+### Security & Hardening
+- **Independent Comments ThreadPoolExecutor**: Separated `/api/comments` execution into an independent `ThreadPoolExecutor(max_workers=2)` so heavy download queues cannot starve or delay comment retrieval.
+- **Direct Loopback Inspection**: Strengthened loopback-only endpoints to check actual peer IP against loopback addresses and verify that no client-supplied proxy headers (`X-Forwarded-For`, `Forwarded`, `X-Real-IP`) are present, preventing bypasses behind local reverse proxies.
+- **Directory Trust Lifetime & Revocation**: Added `source` tracking to `known_output_dirs` table; when `allow_any_output_dir` is toggled off, historical unconstrained folders are dynamically de-authorized. For `/api/open-audacity`, exact match against recorded history entries is enforced.
+- **Folder Picker Concurrency Lock**: Added non-blocking concurrency guard (`FOLDER_PICKER_LOCK`) to `/api/browse-folder` returning HTTP 409 Conflict if a dialog is already active.
+- **Arbitrary Container UID Execution**: Configured `HOME=/tmp`, `DENO_DIR=/tmp/.deno`, and `PIP_CACHE_DIR=/tmp/.pip-cache` in `Dockerfile` to allow execution under custom non-root UIDs.
+- **Path Resolution Consistency**: Propagated canonical realpath output directory resolution to incoming request payloads prior to worker enqueue.
+- **Bandit Security Rule Enforcement**: Activated Ruff Bandit rules (`S`) with codebase annotations and per-file test exclusions.
+
+### Code Quality & Testing
+- **CLI & Launcher Test Suite**: Added dedicated regression test suites `tests/test_main.py` and `tests/test_launcher.py` covering argument parsing, hot reloading, browser dispatch, venv initialization, and fallback logic, elevating overall test suite to 115 passing tests.
+
 ## [2.8.0] - 2026-11-07
 
 ### Security & Hardening (P0)
