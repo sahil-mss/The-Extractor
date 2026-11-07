@@ -1,6 +1,6 @@
-# The Extractor 🎬🎙️📝
+# The Extractor
 
-> **A modern, cross-platform media downloader, batch & playlist processor, tag inspector, timestamped transcript generator, and Audacity audio studio.**
+> **A modern, cross-platform media downloader, batch & playlist processor, tag inspector, timestamped transcript generator, and audio studio.**
 
 [![CI](https://github.com/sahil-mss/The-Extractor/actions/workflows/ci.yml/badge.svg)](https://github.com/sahil-mss/The-Extractor/actions/workflows/ci.yml)
 [![Docker](https://img.shields.io/badge/docker-ready-blue)](docker-compose.yml)
@@ -9,32 +9,32 @@
 
 ---
 
-## 💡 What is this in simple words? (1-Minute Explanation)
+## What is this in simple words? (1-Minute Explanation)
 
-Imagine you found a great YouTube video or playlist, and you want:
-- 🎬 The **video file** to watch offline.
-- 🎵 Just the **audio file** (MP3 or WAV) to listen to or edit in music software like Audacity.
-- 📝 The **exact words spoken (transcript)** with clean timestamps so you can read along, take notes, or create summaries.
-- 🏷️ The **hidden tags and keywords** the creator used to rank the video.
+Imagine you found a video or playlist, and you want:
+- The **video file** to watch offline.
+- Just the **audio file** (MP3 or WAV) to listen to or edit in music software like Audacity.
+- The **exact words spoken (transcript)** with clean timestamps so you can read along, take notes, or create summaries.
+- The **tags and keywords** the creator used to index the video.
 
-**The Extractor** does all of this for you automatically from a clean, beautiful web screen right on your computer. You simply paste a YouTube link, click a button, and it saves everything into your folder.
+**The Extractor** performs these tasks automatically from a clean, responsive web interface running locally on your computer. You paste a link, choose your desired output formats, and files are saved directly to your chosen folder.
 
 ---
 
-## 🏃 Quick Start (One-Click Launch — No Setup Needed!)
+## Quick Start (One-Click Launch — No Manual Environment Setup Needed)
 
-You don't need to manually install dependencies or set up environments. The Extractor includes a smart launcher with logo branding and automated virtual environment setup.
+The Extractor includes an automated launcher that configures virtual environments and verifies required components.
 
 ### Option A: The Easiest Way (Double-Click or 1 Command)
-- **Windows**: Double-click `launch.bat` (or open Command Prompt and type `launch.bat` or `python launcher.py`).
-- **Mac / Linux**: Open Terminal and run `./launch.sh` (or `python3 launcher.py`).
+- **Windows**: Double-click `launch.bat` (or open Command Prompt and run `launch.bat` or `python launcher.py`).
+- **macOS / Linux**: Open Terminal and run `./launch.sh` (or `python3 launcher.py`).
 
-> 💡 **What the launcher does automatically:**
-> 1. Checks if your Python virtual environment (`.venv`) exists; if not, creates it automatically.
-> 2. Checks if all requirements are installed; if missing, installs them automatically on first launch.
+> **What the launcher does automatically:**
+> 1. Checks if your Python virtual environment (`.venv`) exists; creates it automatically if missing.
+> 2. Checks if all requirements are installed; installs them on first launch.
 > 3. Verifies your system for JavaScript engines (`Node.js`/`Deno`) and `FFmpeg`.
-> 4. Logs all startup and activity diagnostics cleanly to `extractor.log`.
-> 5. Opens your browser automatically to **`http://localhost:8000`**!
+> 4. Mirrors execution diagnostics to `extractor.log`.
+> 5. Opens your default web browser to **`http://localhost:8000`**.
 
 ---
 
@@ -44,34 +44,24 @@ pip install -r requirements.txt
 python main.py
 ```
 
-Paste any YouTube link into the box, click **Inspect & Extract**, and you're done!
-
 ---
 
-## 📑 Table of Contents
-- [What is this?](#-what-is-this-in-simple-words-1-minute-explanation)
-- [Quick Start](#-quick-start-one-click-launch--no-setup-needed)
+## Table of Contents
+- [What is this?](#what-is-this-in-simple-words-1-minute-explanation)
+- [Quick Start](#quick-start-one-click-launch--no-manual-environment-setup-needed)
 - [Overview](#overview)
 - [Key Features](#key-features)
-- [Quick Start](#quick-start)
-  - [1. Install & Run CLI (`extractor`)](#1-install--run-cli-extractor)
-  - [2. Run Directly with Python (`python main.py`)](#2-run-directly-with-python-python-mainpy)
+- [Installation & Deployment](#installation--deployment)
+  - [1. CLI Package (`extractor`)](#1-install--run-cli-extractor)
+  - [2. Run Directly with Python](#2-run-directly-with-python-python-mainpy)
   - [3. Docker / Docker Compose](#3-docker--docker-compose)
   - [4. Background System Service (Linux / VPS)](#4-background-system-service-linux--vps)
-- [How It Works (Architecture & Data Flow)](#how-it-works-architecture--data-flow)
-- [Project Structure](#project-structure)
 - [User Guide & Workflows](#user-guide--workflows)
-  - [Single Video Mode](#single-video-mode)
-  - [Batch & Playlist Mode](#batch--playlist-mode)
-  - [Format & Quality Customization](#format--quality-customization)
-  - [Persistent Job History](#persistent-job-history)
-  - [Audacity & System Integration](#audacity--system-integration)
 - [Configuration Reference (`config.yaml`)](#configuration-reference-configyaml)
-- [Cookies & Age-Restricted Videos](#cookies--age-restricted-videos)
-- [YouTube Needs a JavaScript Runtime](#youtube-needs-a-javascript-runtime)
+- [Cookies & Authentication](#cookies--authentication)
+- [JavaScript Runtime Support](#javascript-runtime-support)
 - [Responsible Use](#responsible-use)
 - [Hosting Beyond Localhost](#hosting-beyond-localhost)
-- [CLI / Standalone Mode](#cli--standalone-mode)
 - [REST API Reference](#rest-api-reference)
 - [Troubleshooting & FAQs](#troubleshooting--faqs)
 - [Testing & Quality Assurance](#testing--quality-assurance)
@@ -80,33 +70,33 @@ Paste any YouTube link into the box, click **Inspect & Extract**, and you're don
 
 ## Overview
 
-**The Extractor** is a local web application and automation suite designed for content creators, researchers, audio engineers, and video editors. Given any YouTube URL, playlist, or list of URLs, it inspects metadata in real time, parses hidden tags, extracts timestamped speech-to-text transcripts, and downloads customized video (MP4) and standalone audio (MP3/WAV/M4A) ready for audio mastering in tools like Audacity.
+**The Extractor** is a local web application and automation suite designed for content creators, researchers, audio engineers, and video editors. Given any YouTube URL, playlist, or list of URLs, it inspects metadata in real time, parses tags, extracts timestamped speech-to-text transcripts, and downloads customized video (MP4) and standalone audio (MP3/WAV/M4A) ready for audio mastering in tools like Audacity.
 
-Unlike basic download scripts, The Extractor features:
+Features include:
 - **True cross-platform compatibility** across Windows, macOS, and Linux.
 - **Batch & playlist processing** with an asynchronous worker queue.
 - **Persistent SQLite history** recording every extraction and local file path.
 - **Dynamic configuration** via YAML files and environment variables.
-- **Docker containerization** with FFmpeg pre-bundled.
+- **Docker containerization** with FFmpeg and modern JS runtimes pre-bundled.
 - **Automated test coverage & linting** via `pytest` and `ruff`.
 
 ---
 
 ## Key Features
 
-- 👶 **Baby-Simple UI Redesign**: Designed so anyone can use it effortlessly without technical jargon. Warm charcoal & coral aesthetic (no harsh blues).
-- 💬 **Viewer Comments Search**: Browse and search through top YouTube discussions and viewer comments directly within the dashboard.
-- ✂️ **Snippet & Clip Range Trimming**: Download only the segment you want (e.g. 0:15 to 1:30 or custom seconds) with keyframe-accurate cuts instead of downloading the whole video.
-- 📁 **Custom Save Folders**: Direct downloads into any folder you choose, keeping your files organized automatically.
-- 📊 **Complete Data Export (JSON)**: Export all video metadata, transcripts, and comments as structured JSON or standard media files (.mp4, .mp3, .md/.txt).
-- ⚡ **Instant Metadata & Tag Inspection**: Extract video information (title, channel, views, duration, upload date) and uncover YouTube video tags/keywords that are normally hidden.
-- 📜 **Timestamped Transcript Extraction & Search**: Search through spoken words inside the video and extract speech-to-text transcripts with precise start timestamps.
-- 🔁 **Batch & Playlist Ingestion**: Input a list of URLs (one per line or comma-separated) or a YouTube playlist URL. The background task worker processes them smoothly with real-time queue monitors.
-- 💾 **Persistent SQLite Job History**: All tasks, file locations, titles, tags, and execution statuses are saved in an embedded SQLite database (`extractor.db`). Never lose track of what you've extracted.
-- 🎚️ **Format & Quality Selection**: Select video resolutions (**Best/4K, 1080p, 720p, 480p**) and audio formats (**MP3 320k/192k/128k, WAV lossless, M4A**).
-- 🎙️ **Cross-Platform Audacity Studio**: Dynamic binary detection for Audacity on Windows, macOS (`/Applications/Audacity.app`), and Linux (`/usr/bin/audacity`). One-click launching with the extracted audio track loaded.
-- 🍪 **Cookies & Auth Support**: Optional `cookies.txt` support for age-restricted or bot-detected YouTube videos, plus optional API key protection for LAN/remote hosting.
-- 🐳 **Docker & Compose Ready**: Bundles Python, FFmpeg, and dependencies inside a production Docker container.
+- **Clean UI & Responsive Experience**: Built with accessible navigation, dark/light theme support, high-contrast focus rings, and reduced motion accessibility.
+- **Viewer Comments Search**: Browse and filter top viewer comments directly within the inspection pane.
+- **Snippet & Clip Range Trimming**: Download only the segment you want (e.g. 0:15 to 1:30 or custom seconds) with keyframe-accurate cuts.
+- **Custom Save Folders**: Direct downloads into any folder you choose, keeping your files organized automatically.
+- **Complete Data Export (JSON)**: Export all video metadata, transcripts, and comments as structured JSON alongside standard media files (.mp4, .mp3, .md/.txt).
+- **Metadata & Tag Inspection**: Extract video information (title, channel, views, duration, upload date) and uncover video tags and keywords.
+- **Timestamped Transcript Extraction & Search**: Search through spoken words inside the video and extract transcripts with start timestamps.
+- **Batch & Playlist Ingestion**: Input a list of URLs or a YouTube playlist URL. The background task worker processes items smoothly with queue management.
+- **Persistent SQLite Job History**: All tasks, file locations, titles, tags, and execution statuses are saved in an embedded SQLite database (`extractor.db`).
+- **Format & Quality Selection**: Select video resolutions (**Best/4K, 1080p, 720p, 480p**) and audio formats (**MP3 320k/192k/128k, WAV lossless, M4A**).
+- **Cross-Platform Audacity Studio**: Dynamic binary detection for Audacity on Windows, macOS (`/Applications/Audacity.app`), and Linux (`/usr/bin/audacity`).
+- **Cookies & Auth Support**: Optional `cookies.txt` support for restricted videos, plus API key protection for LAN/remote hosting.
+- **Docker & Compose Ready**: Bundles Python, FFmpeg, and modern JavaScript runtimes inside a production Docker container.
 
 ---
 
@@ -266,19 +256,19 @@ The Extractor/
 
 ## User Guide & Workflows
 
-### 🎥 1. How to Download a Single Video (Step-by-Step)
+### 1. How to Download a Single Video (Step-by-Step)
 1. **Paste URL**: Copy the link of any YouTube video or YouTube Short from your browser and paste it into the search box.
-2. **Inspect**: Click the blue **Inspect & Extract** button (or press Enter on your keyboard).
+2. **Inspect**: Click the **Inspect & Extract** button (or press Enter on your keyboard).
 3. **Choose Options**:
-   - 📺 **Video Quality**: Pick `Best (HD/4K)` or a specific resolution like `1080p` or `720p`.
-   - 🎧 **Audio Quality**: Pick your audio format, such as `MP3 (320k - Best Quality)` or `WAV (Lossless)`.
-   - 📦 **Checkboxes**: Leave **Video**, **Audio**, or **Metadata** checked depending on what you want to save.
+   - **Video Quality**: Pick `Best (HD/4K)` or a specific resolution like `1080p` or `720p`.
+   - **Audio Quality**: Pick your audio format, such as `MP3 (320k - Best Quality)` or `WAV (Lossless)`.
+   - **Checkboxes**: Leave **Video**, **Audio**, or **Metadata** checked depending on what you want to save.
 4. **Download**: Click **Start Extraction & Download**.
 5. **Watch Progress**: You will see a live progress bar showing percentage, download speed, and estimated time remaining. When finished, your files will be safely stored in your `downloads/` folder!
 
 ---
 
-### 📚 2. How to Download a Playlist or Multiple Links at Once
+### 2. How to Download a Playlist or Multiple Links at Once
 1. Click the **Batch & Playlists** tab at the top.
 2. Paste multiple video links (one link per line) OR paste a single YouTube playlist link (e.g., `https://www.youtube.com/playlist?list=...`).
 3. Click **Queue Batch Download**.
@@ -286,7 +276,7 @@ The Extractor/
 
 ---
 
-### 🎨 3. What Format Should I Pick?
+### 3. What Format Should I Pick?
 - **For watching videos**: Choose `Best Available (HD/4K)` or `1080p Full HD`.
 - **For listening to music or podcasts on your phone/car**: Choose `MP3 (320 kbps - Studio)`.
 - **For music editing or recording software (Audacity, FL Studio, Premiere)**: Choose `WAV (Lossless PCM)`.
@@ -294,13 +284,13 @@ The Extractor/
 
 ---
 
-### 📜 4. Job History
-- Click the **📜 History** button in the top right corner anytime.
+### 4. Job History
+- Click the **History** button in the top right corner anytime.
 - You can view everything you have previously downloaded, see file locations on your hard drive, or remove past records.
 
 ---
 
-### 🎛️ 5. Audacity & Folder Shortcuts
+### 5. Audacity & Folder Shortcuts
 - **Open Downloads Folder**: Opens your computer's folder directly to show you your saved files.
 - **Edit in Audacity**: If you have Audacity installed, clicking this button automatically launches Audacity with your downloaded audio file loaded into the editor!
 

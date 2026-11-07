@@ -106,19 +106,22 @@ def check_and_setup_venv() -> str:
     if not deps_ready:
         log("📥 Dependencies are missing or incomplete. Automatically installing requirements.txt...")
         log("   (This only happens once on your first run — please wait a moment!)")
+        pip_cmd = [
+            venv_python,
+            "-m",
+            "pip",
+            "install",
+            "-r",
+            REQ_FILE,
+            "--disable-pip-version-check",
+            "--prefer-binary",
+            "--retries",
+            "5",
+            "--timeout",
+            "30",
+        ]
         try:
-            # Upgrade pip first silently
-            subprocess.run(
-                [venv_python, "-m", "pip", "install", "--upgrade", "pip", "--disable-pip-version-check"],
-                check=False,
-                cwd=PROJECT_DIR,
-            )
-            # Install requirements
-            subprocess.run(
-                [venv_python, "-m", "pip", "install", "-r", REQ_FILE, "--disable-pip-version-check"],
-                check=True,
-                cwd=PROJECT_DIR,
-            )
+            subprocess.run(pip_cmd, check=True, cwd=PROJECT_DIR)
             log("🎉 All requirements installed successfully!")
         except Exception as e:
             log(f"❌ Error installing requirements: {e}")
