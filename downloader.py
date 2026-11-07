@@ -5,6 +5,7 @@ import os
 import platform
 import re
 import shutil
+import subprocess
 import sys
 import threading
 import time
@@ -137,15 +138,96 @@ def clean_leftover_partial_files(target_dir: str, vid_id: str) -> None:
                     os.remove(os.path.join(target_dir, fname))
 
 
+def get_detected_js_runtime() -> dict[str, Any]:
+    """Detect and validate available JavaScript runtimes against yt-dlp minimum requirements.
+
+    Returns dict with keys:
+      'available': bool,
+      'name': str | None,
+      'version': str | None,
+      'supported': bool
+    """
+    # 1. Prefer yt-dlp's internal runtime validation if available
+    try:
+        import yt_dlp
+        ydl = yt_dlp.YoutubeDL()
+        runtimes = getattr(ydl, "_js_runtimes", {})
+        for name, rt in runtimes.items():
+            info = getattr(rt, "info", None)
+            if info:
+                is_supported = bool(getattr(info, "supported", False))
+                version_str = str(getattr(info, "version", "unknown"))
+                rt_name = str(getattr(info, "name", name))
+                if is_supported:
+                    return {
+                        "available": True,
+                        "name": rt_name,
+                        "version": version_str,
+                        "supported": True,
+                    }
+        # If any was detected but none supported
+        for name, rt in runtimes.items():
+            info = getattr(rt, "info", None)
+            if info:
+                return {
+                    "available": False,
+                    "name": str(getattr(info, "name", name)),
+                    "version": str(getattr(info, "version", "unknown")),
+                    "supported": False,
+                }
+    except Exception:
+        pass
+
+    # 2. Fallback manual version detection and comparison
+    candidates = [
+        ("deno", ["--version"], r"^deno\s+(\S+)", (2, 3, 0)),
+        ("node", ["--version"], r"^v?(\S+)", (22, 0, 0)),
+        ("bun", ["--version"], r"^(\S+)", (1, 2, 11)),
+        ("quickjs", ["--help"], r"QuickJS(?:-ng)?\s+version\s+(\S+)", (2023, 12, 9)),
+        ("qjs", ["--help"], r"QuickJS(?:-ng)?\s+version\s+(\S+)", (2023, 12, 9)),
+    ]
+
+    for bin_name, args, pattern, min_ver in candidates:
+        exe = shutil.which(bin_name)
+        if not exe:
+            continue
+        try:
+            res = subprocess.run(
+                [exe, *args],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+            out = (res.stdout or "") + " " + (res.stderr or "")
+            m = re.search(pattern, out, re.MULTILINE)
+            version_str = m.group(1) if m else "unknown"
+            vt_match = re.search(r"(\d+)(?:\.(\d+))?(?:\.(\d+))?", version_str)
+            if vt_match:
+                vt = tuple(int(x) if x is not None else 0 for x in vt_match.groups())
+            else:
+                vt = (0, 0, 0)
+            is_supported = vt >= min_ver
+            return {
+                "available": is_supported,
+                "name": bin_name,
+                "version": version_str,
+                "supported": is_supported,
+            }
+        except Exception:
+            continue
+
+    return {
+        "available": False,
+        "name": None,
+        "version": None,
+        "supported": False,
+    }
+
+
 def js_runtime_available() -> bool:
-    """Check if any supported JavaScript runtime (deno, node, bun, quickjs) is available on PATH."""
-    return bool(
-        shutil.which("deno")
-        or shutil.which("node")
-        or shutil.which("bun")
-        or shutil.which("quickjs")
-        or shutil.which("qjs")
-    )
+    """Check if any supported JavaScript runtime (deno, node, bun, quickjs) meeting minimum versions is available."""
+    return get_detected_js_runtime().get("available", False)
 
 
 def ffmpeg_available() -> bool:

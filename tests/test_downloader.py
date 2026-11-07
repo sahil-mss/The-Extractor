@@ -384,27 +384,54 @@ def test_inspect_video_cancel_during_retry_sleep(monkeypatch):
 
 def test_js_runtime_available(monkeypatch):
     import shutil
+    import subprocess
+    from unittest.mock import MagicMock
 
-    from downloader import js_runtime_available
+    import downloader
+    from downloader import get_detected_js_runtime, js_runtime_available
 
-    # 1. When deno is present
+    # Bypass yt-dlp internal check to test version detection logic
+    monkeypatch.setattr(downloader, "yt_dlp", MagicMock(_js_runtimes={}))
+
+    # 1. Deno >= 2.3.0 is supported
     monkeypatch.setattr(shutil, "which", lambda cmd: "/usr/bin/deno" if cmd == "deno" else None)
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *args, **kwargs: MagicMock(stdout="deno 2.6.0 (release, x86_64)", stderr="")
+    )
+    res = get_detected_js_runtime()
+    assert res["available"] is True
+    assert res["name"] == "deno"
+    assert res["version"] == "2.6.0"
     assert js_runtime_available() is True
 
-    # 2. When node is present
+    # 2. Node < 22.0.0 (e.g. Node 18) is rejected
     monkeypatch.setattr(shutil, "which", lambda cmd: "/usr/bin/node" if cmd == "node" else None)
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *args, **kwargs: MagicMock(stdout="v18.19.0\n", stderr="")
+    )
+    res = get_detected_js_runtime()
+    assert res["available"] is False
+    assert res["supported"] is False
+    assert res["name"] == "node"
+    assert res["version"] == "18.19.0"
+    assert js_runtime_available() is False
+
+    # 3. Node >= 22.0.0 is accepted
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *args, **kwargs: MagicMock(stdout="v22.4.1\n", stderr="")
+    )
     assert js_runtime_available() is True
 
-    # 3. When bun is present
-    monkeypatch.setattr(shutil, "which", lambda cmd: "/usr/bin/bun" if cmd == "bun" else None)
-    assert js_runtime_available() is True
-
-    # 4. When quickjs/qjs is present
-    monkeypatch.setattr(shutil, "which", lambda cmd: "/usr/bin/qjs" if cmd == "qjs" else None)
-    assert js_runtime_available() is True
-
-    # 5. When none are present
+    # 4. None present
     monkeypatch.setattr(shutil, "which", lambda cmd: None)
+    res = get_detected_js_runtime()
+    assert res["available"] is False
     assert js_runtime_available() is False
 
 

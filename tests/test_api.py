@@ -19,6 +19,9 @@ def test_api_config():
     assert "defaults" in data
     assert "js_runtime_available" in data
     assert isinstance(data["js_runtime_available"], bool)
+    assert "js_runtime_name" in data
+    assert "js_runtime_version" in data
+    assert "js_runtime_supported" in data
     assert "ffmpeg_available" in data
     assert isinstance(data["ffmpeg_available"], bool)
 
