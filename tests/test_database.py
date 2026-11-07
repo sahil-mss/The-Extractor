@@ -66,3 +66,47 @@ def test_init_db_marks_orphaned_tasks_interrupted(tmp_path):
         assert "interrupted" in h["error_message"].lower()
         assert h["completed_at"] is not None
 
+
+def test_init_db_migration_pragma_check(tmp_path):
+    import sqlite3
+
+    test_db = str(tmp_path / "legacy_schema.db")
+    database.DB_PATH = test_db
+
+    # Create a table missing json_path as in older schema versions (prior to v2.5.0)
+    with sqlite3.connect(test_db) as conn:
+        conn.execute("""
+        CREATE TABLE extraction_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            task_id TEXT UNIQUE,
+            url TEXT NOT NULL,
+            video_id TEXT,
+            title TEXT,
+            channel TEXT,
+            duration TEXT,
+            thumbnail TEXT,
+            tags_count INTEGER DEFAULT 0,
+            has_transcript BOOLEAN DEFAULT 0,
+            video_path TEXT,
+            audio_path TEXT,
+            doc_md_path TEXT,
+            doc_txt_path TEXT,
+            status TEXT NOT NULL,
+            error_message TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            completed_at TIMESTAMP
+        )
+        """)
+
+    # Running init_db must detect via PRAGMA table_info and add json_path without failure
+    database.init_db()
+
+    with sqlite3.connect(test_db) as conn:
+        cursor = conn.execute("PRAGMA table_info(extraction_history)")
+        columns = [row[1] for row in cursor.fetchall()]
+        assert "json_path" in columns
+
+    # Running init_db again (idempotent) should not error or add it twice
+    database.init_db()
+
+
