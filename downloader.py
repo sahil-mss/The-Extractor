@@ -108,6 +108,11 @@ class PermanentMediaError(RuntimeError):
     pass
 
 
+class CommentsUnavailable(Exception):
+    """Raised when comments cannot be extracted (disabled, video private, or upstream extraction error)."""
+    pass
+
+
 def is_permanent_error(err: Exception | str) -> bool:
     msg = str(err).lower()
     permanent_patterns = [
@@ -646,6 +651,24 @@ def fetch_transcript_data(video_id: str, ydl_info: dict | None = None) -> list[d
     return transcript_items
 
 
+def parse_cleaned_comments(raw_comments: list[dict[str, Any]], max_comments: int = 50) -> list[dict[str, Any]]:
+    """Parse and clean raw yt-dlp comments into standard dictionary list."""
+    cleaned = []
+    for c in (raw_comments or [])[:max_comments]:
+        if not c:
+            continue
+        cleaned.append({
+            'id': str(c.get('id', '')),
+            'author': c.get('author') or c.get('author_id') or 'Anonymous',
+            'author_thumbnail': c.get('author_thumbnail') or '',
+            'text': c.get('text', '').strip(),
+            'like_count': c.get('like_count', 0) or 0,
+            'timestamp': c.get('timestamp') or 0,
+            'is_favorited': bool(c.get('is_favorited')),
+        })
+    return cleaned
+
+
 def fetch_comments_data(
     url: str,
     max_comments: int = 50,
@@ -655,10 +678,11 @@ def fetch_comments_data(
     """
     Fetch top user comments for a video using yt-dlp.
     Returns [{'id': '...', 'author': '...', 'text': '...', 'like_count': 12, ...}]
+    Raises CommentsUnavailable if comments are disabled or fail to extract.
     """
-    valid, _ = is_valid_youtube_url(url)
+    valid, err = is_valid_youtube_url(url)
     if not valid:
-        return []
+        raise ValueError(err)
 
     opts = get_base_ydl_opts(cookies_path)
     opts.update({
@@ -673,23 +697,14 @@ def fetch_comments_data(
             if is_cancelled and is_cancelled():
                 return []
             info = ydl.extract_info(url, download=False)
-            raw_comments = info.get('comments', []) if info else []
-            cleaned = []
-            for c in raw_comments[:max_comments]:
-                if not c:
-                    continue
-                cleaned.append({
-                    'id': str(c.get('id', '')),
-                    'author': c.get('author') or c.get('author_id') or 'Anonymous',
-                    'author_thumbnail': c.get('author_thumbnail') or '',
-                    'text': c.get('text', '').strip(),
-                    'like_count': c.get('like_count', 0) or 0,
-                    'timestamp': c.get('timestamp') or 0,
-                    'is_favorited': bool(c.get('is_favorited')),
-                })
-            return cleaned
-    except Exception:
-        return []
+            if not info:
+                raise CommentsUnavailable("Failed to extract video information for comments.")
+            raw_comments = info.get('comments', [])
+            return parse_cleaned_comments(raw_comments, max_comments=max_comments)
+    except DownloadCancelled:
+        raise
+    except Exception as e:
+        raise CommentsUnavailable(f"Comments unavailable: {e}") from e
 
 def inspect_video(
     url: str,
@@ -709,6 +724,9 @@ def inspect_video(
     opts = get_base_ydl_opts(cookies_path)
     opts['skip_download'] = True
     opts['extract_flat'] = False
+    if fetch_comments:
+        opts['getcomments'] = True
+        opts['extractor_args'] = {'youtube': {'max_comments': ['50']}}
 
     last_err = None
     for attempt in range(config.processing.max_retries):
@@ -748,11 +766,7 @@ def inspect_video(
         upload_date = f"{upload_date[:4]}-{upload_date[4:6]}-{upload_date[6:]}"
 
     transcript = fetch_transcript_data(vid_id, info)
-    comments = (
-        fetch_comments_data(url, max_comments=50, cookies_path=cookies_path, is_cancelled=is_cancelled)
-        if fetch_comments
-        else []
-    )
+    comments = parse_cleaned_comments(info.get('comments', []), max_comments=50) if fetch_comments else []
 
     return {
         'id': vid_id,

@@ -481,19 +481,26 @@ def api_inspect(req: InspectRequest, authorized: bool = Depends(verify_api_key))
 
 @app.post("/api/comments")
 def api_get_comments(req: InspectRequest, max_comments: int = 50, authorized: bool = Depends(verify_api_key)):
-    """Fetch user comments for searching and filtering."""
+    """Fetch user comments for searching and filtering with a 30s timeout and accurate error handling."""
     url = req.url.strip()
     valid, err_msg = downloader.is_valid_youtube_url(url)
     if not valid:
         raise HTTPException(status_code=400, detail=err_msg)
 
+    limit = max(5, min(max_comments, 100))
     try:
-        limit = max(5, min(max_comments, 100))
-        comments = downloader.fetch_comments_data(url, max_comments=limit)
+        future = executor.submit(downloader.fetch_comments_data, url, max_comments=limit)
+        comments = future.result(timeout=30)
         return {"status": "success", "count": len(comments), "comments": comments}
+    except TimeoutError as e:
+        raise HTTPException(status_code=504, detail="Fetching comments timed out after 30 seconds.") from e
+    except downloader.CommentsUnavailable as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         logger.error(f"Fetch comments error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to fetch comments: {e}") from e
+        raise HTTPException(status_code=502, detail=f"Failed to fetch comments: {e}") from e
 
 @app.get("/api/check-downloaded")
 def api_check_downloaded(url: str, authorized: bool = Depends(verify_api_key)):

@@ -462,3 +462,57 @@ def test_comment_highlight_logic_in_frontend():
     assert res2 == "Rock &amp; Roll <mark class='highlight'>&lt;3</mark>"
 
 
+def test_api_comments_error_handling_and_no_duplication(monkeypatch):
+    import downloader
+    # 1. Test CommentsUnavailable raises 502
+    def mock_fetch_fail(url, max_comments=50):
+        raise downloader.CommentsUnavailable("Comments are disabled for this video.")
+
+    monkeypatch.setattr(downloader, "fetch_comments_data", mock_fetch_fail)
+    resp = client.post("/api/comments", json={"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"})
+    assert resp.status_code == 502
+    assert "Comments are disabled" in resp.json()["detail"]
+
+    # 2. Test timeout handling (504)
+    def mock_fetch_timeout(url, max_comments=50):
+        import time
+        time.sleep(0.05)
+        raise TimeoutError("timeout")
+
+    monkeypatch.setattr(downloader, "fetch_comments_data", mock_fetch_timeout)
+    resp_timeout = client.post("/api/comments", json={"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"})
+    assert resp_timeout.status_code == 504
+    assert "timed out" in resp_timeout.json()["detail"]
+
+    # 3. Test inspect_video extracts comments in single pass when fetch_comments=True
+    calls = []
+
+    class DummyYDL:
+        def __init__(self, opts):
+            self.opts = opts
+            calls.append(opts)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def extract_info(self, url, download=False):
+            return {
+                "id": "dQw4w9WgXcQ",
+                "title": "Never Gonna Give You Up",
+                "uploader": "Rick Astley",
+                "duration": 213,
+                "comments": [{"id": "c1", "author": "Alice", "text": "Classic!"}],
+            }
+
+    monkeypatch.setattr(downloader.yt_dlp, "YoutubeDL", DummyYDL)
+    data = downloader.inspect_video("https://www.youtube.com/watch?v=dQw4w9WgXcQ", fetch_comments=True)
+    assert len(calls) == 1
+    assert calls[0].get("getcomments") is True
+    assert len(data["comments"]) == 1
+    assert data["comments"][0]["author"] == "Alice"
+
+
+
