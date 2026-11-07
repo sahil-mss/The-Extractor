@@ -152,3 +152,20 @@ def test_logging_rotation_setup(tmp_path):
     assert rfh.backupCount == 3
 
 
+def test_launcher_helpers(monkeypatch):
+    import shutil
+    import sys
+
+    import launcher
+
+    # 1. Windows with py launcher
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(shutil, "which", lambda cmd: "C:\\Windows\\py.exe" if cmd == "py" else None)
+    assert launcher.get_base_python() == ["py", "-3"]
+
+    # 2. Non-windows or without py
+    monkeypatch.setattr(shutil, "which", lambda cmd: None)
+    assert launcher.get_base_python() == [sys.executable]
+
+
+

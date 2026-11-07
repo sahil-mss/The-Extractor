@@ -50,6 +50,13 @@ def log(msg: str):
         pass
 
 
+def get_base_python() -> list[str]:
+    """Returns the preferred base Python invocation command (py -3 on Windows, sys.executable otherwise)."""
+    if sys.platform == "win32" and shutil.which("py"):
+        return ["py", "-3"]
+    return [sys.executable]
+
+
 def get_venv_python() -> str:
     """Returns the path to Python inside .venv."""
     if sys.platform == "win32":
@@ -64,11 +71,17 @@ def check_and_setup_venv() -> str:
     # 1. Create venv if missing
     if not os.path.exists(venv_python):
         log("📦 Virtual environment (.venv) not found. Creating one for you...")
+        base_py = get_base_python()
         try:
-            subprocess.run([sys.executable, "-m", "venv", VENV_DIR], check=True, cwd=PROJECT_DIR)
+            subprocess.run([*base_py, "-m", "venv", VENV_DIR], check=True, cwd=PROJECT_DIR)
             log("✅ Virtual environment (.venv) created successfully.")
         except Exception as e:
-            log(f"⚠️ Could not create virtual environment: {e}. Falling back to system Python.")
+            log(f"⚠️ Could not create virtual environment: {e}.")
+            if sys.platform != "win32":
+                log("💡 If on Debian/Ubuntu, try installing the venv package: sudo apt install python3-venv")
+            elif sys.platform == "darwin":
+                log("💡 If on macOS, check your Python installation: brew install python")
+            log("Falling back to system Python.")
             return sys.executable
 
     # 2. Check if dependencies are installed
@@ -83,7 +96,7 @@ def check_and_setup_venv() -> str:
             capture_output=True,
             text=True,
             cwd=PROJECT_DIR,
-            timeout=10,
+            timeout=60,
         )
         if "READY" in res.stdout:
             deps_ready = True
