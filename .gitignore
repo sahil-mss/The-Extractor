@@ -36,3 +36,5 @@ downloads/*
 .DS_Store
 Thumbs.db
 *.log
+.agent/
+.agent/workflows/
