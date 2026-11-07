@@ -43,6 +43,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     yield
     # Graceful shutdown: cancel pending futures and don't block process exit
     executor.shutdown(wait=False, cancel_futures=True)
+    interactive_executor.shutdown(wait=False, cancel_futures=True)
 
 
 app = FastAPI(title="The Extractor API", version="2.8.0", lifespan=lifespan)
@@ -97,6 +98,7 @@ TASKS_LOCK = threading.RLock()
 TASKS: dict[str, dict[str, Any]] = {}
 CANCELLED_TASKS: set[str] = set()
 executor = ThreadPoolExecutor(max_workers=config.processing.max_concurrent_downloads)
+interactive_executor = ThreadPoolExecutor(max_workers=2)
 
 # In-memory auth failure tracker protected by lock: ip -> (failure_timestamps, blocked_until)
 AUTH_FAILURES_LOCK = threading.Lock()
@@ -488,11 +490,28 @@ def api_get_comments(req: InspectRequest, max_comments: int = 50, authorized: bo
         raise HTTPException(status_code=400, detail=err_msg)
 
     limit = max(5, min(max_comments, 100))
+    cancel_flag = threading.Event()
+    future = None
+
+    def _fetch():
+        try:
+            return downloader.fetch_comments_data(
+                url,
+                max_comments=limit,
+                is_cancelled=cancel_flag.is_set,
+            )
+        except TypeError:
+            # Fallback for mock callables or wrappers not accepting is_cancelled
+            return downloader.fetch_comments_data(url, max_comments=limit)
+
     try:
-        future = executor.submit(downloader.fetch_comments_data, url, max_comments=limit)
+        future = interactive_executor.submit(_fetch)
         comments = future.result(timeout=30)
         return {"status": "success", "count": len(comments), "comments": comments}
     except TimeoutError as e:
+        cancel_flag.set()
+        if future:
+            future.cancel()
         raise HTTPException(status_code=504, detail="Fetching comments timed out after 30 seconds.") from e
     except downloader.CommentsUnavailable as e:
         raise HTTPException(status_code=502, detail=str(e)) from e

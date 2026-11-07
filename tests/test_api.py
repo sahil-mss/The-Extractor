@@ -515,6 +515,44 @@ def test_api_comments_error_handling_and_no_duplication(monkeypatch):
     assert data["comments"][0]["author"] == "Alice"
 
 
+def test_api_comments_independent_executor_from_downloads(monkeypatch):
+    import threading
+
+    import downloader
+    import server
+
+    # Saturate all download workers in server.executor
+    block_event = threading.Event()
+    worker_started = threading.Event()
+
+    def blocking_job():
+        worker_started.set()
+        block_event.wait(timeout=5)
+
+    # Submit 10 jobs to completely fill worker queue
+    futures = [server.executor.submit(blocking_job) for _ in range(10)]
+    assert worker_started.wait(timeout=5)
+
+    try:
+        # Mock comments to return immediately
+        monkeypatch.setattr(
+            downloader,
+            "fetch_comments_data",
+            lambda url, max_comments=50, is_cancelled=None: [{"id": "c1", "author": "Alice", "text": "Hi"}],
+        )
+
+        # Call /api/comments while download executor is completely saturated
+        resp = client.post("/api/comments", json={"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"})
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "success"
+        assert len(resp.json()["comments"]) == 1
+    finally:
+        block_event.set()
+        for f in futures:
+            f.result(timeout=5)
+
+
+
 def test_frontend_accessibility_labels_and_attributes():
     with open("web/index.html", encoding="utf-8") as f:
         html = f.read()
