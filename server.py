@@ -718,7 +718,8 @@ def api_download(req: DownloadRequest, request: Request = None, authorized: bool
     if not valid:
         raise HTTPException(status_code=400, detail=err_msg)
 
-    validate_and_resolve_output_dir(req.output_dir, request=request)
+    resolved_dir = validate_and_resolve_output_dir(req.output_dir, request=request)
+    req.output_dir = resolved_dir
 
     task_id = enqueue_download(req)
     return {"status": "started", "task_id": task_id}
@@ -729,7 +730,8 @@ def api_batch_download(req: BatchDownloadRequest, request: Request = None, autho
     if not raw_urls:
         raise HTTPException(status_code=400, detail="At least one URL is required")
 
-    validate_and_resolve_output_dir(req.output_dir, request=request)
+    resolved_dir = validate_and_resolve_output_dir(req.output_dir, request=request)
+    req.output_dir = resolved_dir
 
     # Enforce max batch size limit
     if len(raw_urls) > config.processing.max_batch_size:

@@ -613,5 +613,47 @@ def test_frontend_accessibility_labels_and_attributes():
     assert "@media (prefers-reduced-motion: reduce)" in css
 
 
+def test_api_download_resolves_and_updates_req_output_dir(monkeypatch, tmp_path):
+    import os
+
+    import server
+
+    captured = {}
+
+    def mock_download_bundle(**kwargs):
+        captured.update(kwargs)
+        return {"audio": str(tmp_path / "song.mp3")}
+
+    monkeypatch.setattr(server.downloader, "download_media_bundle", mock_download_bundle)
+    monkeypatch.setattr(server.downloader, "is_valid_youtube_url", lambda url: (True, ""))
+
+    base_dir = tmp_path / "downloads"
+    base_dir.mkdir()
+    sub_dir = base_dir / "custom_subdir"
+    sub_dir.mkdir()
+
+    monkeypatch.setattr(server.config.paths, "download_dir", str(base_dir))
+
+    relative_target = "custom_subdir"
+
+    resp = client.post("/api/download", json={
+        "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        "output_dir": relative_target
+    })
+    assert resp.status_code == 200
+    task_id = resp.json()["task_id"]
+
+    import time
+    for _ in range(20):
+        with server.TASKS_LOCK:
+            t = server.TASKS.get(task_id, {})
+            if t.get("status") in ("finished", "error"):
+                break
+        time.sleep(0.05)
+
+    assert captured.get("output_dir") == os.path.realpath(str(sub_dir))
+
+
+
 
 
