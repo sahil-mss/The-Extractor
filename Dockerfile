@@ -1,13 +1,15 @@
-# Multi-stage lightweight production image with FFmpeg
+# Multi-stage lightweight production image with FFmpeg and modern JS runtime for yt-dlp
 FROM python:3.11-slim
 
-# Install system dependencies including FFmpeg and Node.js runtime for YouTube challenges
+# Install system dependencies including FFmpeg
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
-    nodejs \
     ca-certificates \
     curl \
     && rm -rf /var/lib/apt/lists/*
+
+# Install modern Deno runtime (>=2.3.0) for yt-dlp JavaScript challenge solver
+COPY --from=denoland/deno:bin-2.6.0 /deno /usr/local/bin/deno
 
 WORKDIR /app
 

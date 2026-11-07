@@ -108,3 +108,20 @@ jobs:
       - name: Run Pytest with Deprecation Warnings as Errors
         run: |
           pytest -q -W error::DeprecationWarning -W "ignore:The anyio.abc.BlockingPortal alias is deprecated:DeprecationWarning:starlette.testclient"
+
+  docker-build:
+    name: Build & Verify Docker Image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Build Docker Image
+        run: |
+          docker build -t the-extractor:test .
+
+      - name: Verify Deno JS Runtime (minimum 2.3.0)
+        run: |
+          DENO_VER=$(docker run --rm the-extractor:test deno --version | head -n 1 | awk '{print $2}')
+          echo "Deno version in container: $DENO_VER"
+          python3 -c "import sys; from packaging.version import Version; sys.exit(0 if Version('$DENO_VER') >= Version('2.3.0') else 1)"
