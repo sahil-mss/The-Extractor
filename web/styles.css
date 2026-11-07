@@ -824,6 +824,10 @@ body {
   padding: 0.5rem 0.75rem;
   margin-bottom: 1rem;
 }
+.folder-selection-row:focus-within {
+  border-color: var(--border-active);
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+}
 .folder-label {
   font-size: 0.75rem;
   color: var(--text-secondary);
@@ -1380,6 +1384,10 @@ body {
   border-radius: var(--radius-sm);
   padding: 0.4rem 0.75rem;
   animation: fadeIn 0.2s ease;
+}
+.desc-search-bar:focus-within {
+  border-color: var(--border-active);
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
 }
 .desc-search-input {
   flex: 1;
