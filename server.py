@@ -80,6 +80,68 @@ AUTH_FAILURES_LOCK = threading.Lock()
 AUTH_FAILURES: dict[str, list[float]] = {}
 AUTH_BLOCKED_UNTIL: dict[str, float] = {}
 
+def validate_and_resolve_output_dir(requested_dir: str | None, client_host: str | None = None) -> str:
+    """Validate requested output_dir against security boundaries and resolve it.
+
+    Rules:
+    - Default to config.absolute_download_dir if omitted.
+    - If paths.allow_any_output_dir is True AND host is loopback, arbitrary dirs are permitted.
+    - Otherwise, the resolved directory must be relative to one of the allowed roots
+      (paths.download_dir or paths.allowed_output_roots).
+    - If valid custom root, records it in known_output_dirs table so delete/Audacity allows it.
+    """
+    from pathlib import Path
+
+    raw = (requested_dir or "").strip()
+    if not raw:
+        return config.absolute_download_dir
+
+    if os.path.isabs(raw):
+        target_abs = os.path.abspath(raw)
+    else:
+        target_abs = os.path.abspath(os.path.join(config.absolute_download_dir, raw))
+
+    real_target_str = os.path.normcase(os.path.realpath(target_abs))
+    target_path = Path(real_target_str)
+
+    # Determine if loopback host
+    is_loopback = False
+    if client_host:
+        ch = client_host.strip().lower()
+        if ch in ("127.0.0.1", "localhost", "::1", "testclient"):
+            is_loopback = True
+        else:
+            try:
+                is_loopback = ipaddress.ip_address(ch).is_loopback
+            except ValueError:
+                is_loopback = False
+    elif not is_non_localhost(config.app.host):
+        is_loopback = True
+
+    # If allow_any_output_dir is True and loopback host, allow and record
+    allow_any = getattr(config.paths, "allow_any_output_dir", False) and is_loopback
+    if allow_any:
+        database.record_known_output_dir(target_abs)
+        return target_abs
+
+    # Otherwise must be relative to an allowed root
+    allowed_roots = [os.path.normcase(os.path.realpath(os.path.abspath(config.absolute_download_dir)))]
+    for r in getattr(config.paths, "allowed_output_roots", []):
+        if r:
+            allowed_roots.append(os.path.normcase(os.path.realpath(os.path.abspath(r))))
+
+    for root_str in allowed_roots:
+        root_path = Path(root_str)
+        try:
+            if target_path.is_relative_to(root_path):
+                database.record_known_output_dir(target_abs)
+                return target_abs
+        except ValueError:
+            continue
+
+    raise HTTPException(status_code=400, detail="Invalid output_dir: path is outside allowed output directories")
+
+
 def is_trusted_proxy(ip: str, trusted_list: list[str]) -> bool:
     """Check if an IP address matches any trusted proxy IP or CIDR network."""
     if not ip or not trusted_list:
@@ -465,10 +527,7 @@ def run_download_task(task_id: str, req: DownloadRequest):
                 TASKS[task_id]["message"] = "Processing download..."
                 TASKS[task_id]["started_at"] = time.time()
 
-        raw_out = req.output_dir.strip() if req.output_dir else ""
-        target_folder = raw_out if raw_out else config.absolute_download_dir
-        if not os.path.isabs(target_folder):
-            target_folder = os.path.abspath(os.path.join(config.absolute_download_dir, target_folder))
+        target_folder = validate_and_resolve_output_dir(req.output_dir)
 
         results = downloader.download_media_bundle(
             url=req.url,
@@ -598,20 +657,26 @@ def enqueue_download(req: DownloadRequest) -> str:
     return task_id
 
 @app.post("/api/download")
-def api_download(req: DownloadRequest, authorized: bool = Depends(verify_api_key)):
+def api_download(req: DownloadRequest, request: Request = None, authorized: bool = Depends(verify_api_key)):
     url = req.url.strip()
     valid, err_msg = downloader.is_valid_youtube_url(url)
     if not valid:
         raise HTTPException(status_code=400, detail=err_msg)
 
+    client_ip = get_client_ip(request) if request is not None else None
+    validate_and_resolve_output_dir(req.output_dir, client_host=client_ip)
+
     task_id = enqueue_download(req)
     return {"status": "started", "task_id": task_id}
 
 @app.post("/api/batch-download")
-def api_batch_download(req: BatchDownloadRequest, authorized: bool = Depends(verify_api_key)):
+def api_batch_download(req: BatchDownloadRequest, request: Request = None, authorized: bool = Depends(verify_api_key)):
     raw_urls = [u.strip() for u in req.urls if u.strip()]
     if not raw_urls:
         raise HTTPException(status_code=400, detail="At least one URL is required")
+
+    client_ip = get_client_ip(request) if request is not None else None
+    validate_and_resolve_output_dir(req.output_dir, client_host=client_ip)
 
     # Enforce max batch size limit
     if len(raw_urls) > config.processing.max_batch_size:

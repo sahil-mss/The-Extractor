@@ -48,8 +48,19 @@ def init_db():
         conn.execute("CREATE INDEX IF NOT EXISTS idx_history_lookup ON extraction_history(url, video_id)")
 
         # Migration: Ensure json_path exists in existing databases
-        with contextlib.suppress(sqlite3.OperationalError):
+        pragma_cursor = conn.execute("PRAGMA table_info(extraction_history)")
+        columns = [row[1] for row in pragma_cursor.fetchall()]
+        if "json_path" not in columns:
             conn.execute("ALTER TABLE extraction_history ADD COLUMN json_path TEXT")
+
+        # Table for accepted custom output directories
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS known_output_dirs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            path TEXT UNIQUE NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """)
 
         # Mark any tasks left in 'queued' or 'running' state from previous crash/restart as 'interrupted'
         conn.execute("""
@@ -147,15 +158,46 @@ def record_task_completed(
             completed_at
         ))
 
+def record_known_output_dir(dir_path: str) -> None:
+    """Record an approved custom output directory in the database."""
+    if not dir_path:
+        return
+    real_p = os.path.normcase(os.path.realpath(os.path.abspath(dir_path)))
+    with get_db_connection() as conn:
+        conn.execute("INSERT OR IGNORE INTO known_output_dirs (path) VALUES (?)", (real_p,))
+
+
+def get_known_output_dirs() -> set[str]:
+    """Retrieve all recorded approved custom output directories."""
+    with get_db_connection() as conn:
+        cursor = conn.execute("SELECT path FROM known_output_dirs")
+        return {row[0] for row in cursor.fetchall()}
+
+
 def is_safe_download_path(file_path: str) -> bool:
-    """Ensure the target path is strictly located inside the configured download directory."""
+    """Ensure target path is strictly located inside configured download dir or approved roots."""
     if not file_path:
         return False
     try:
-        real_target = os.path.realpath(os.path.abspath(file_path))
-        real_allowed = os.path.realpath(os.path.abspath(config.absolute_download_dir))
-        common = os.path.commonpath([real_target, real_allowed])
-        return common == real_allowed and real_target != real_allowed
+        from pathlib import Path
+
+        real_target_str = os.path.normcase(os.path.realpath(os.path.abspath(file_path)))
+        real_target = Path(real_target_str)
+
+        # Build set of candidate allowed directories
+        allowed_dirs = [os.path.normcase(os.path.realpath(os.path.abspath(config.absolute_download_dir)))]
+        for extra in getattr(config.paths, "allowed_output_roots", []):
+            if extra:
+                allowed_dirs.append(os.path.normcase(os.path.realpath(os.path.abspath(extra))))
+
+        # Add dynamically recorded known output dirs
+        allowed_dirs.extend(get_known_output_dirs())
+
+        for d in allowed_dirs:
+            root = Path(d)
+            if real_target.is_relative_to(root) and real_target != root:
+                return True
+        return False
     except Exception:
         return False
 

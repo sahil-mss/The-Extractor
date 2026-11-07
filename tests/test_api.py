@@ -274,3 +274,56 @@ def test_api_download_with_snippet_and_json(monkeypatch):
     task_id = resp.json()["task_id"]
     assert task_id is not None
 
+
+def test_output_dir_validation_and_safety(tmp_path, monkeypatch):
+    import database
+    from config import config
+
+    # Set up dedicated downloads root
+    dl_root = tmp_path / "downloads"
+    dl_root.mkdir()
+    allowed_custom = tmp_path / "allowed_custom"
+    allowed_custom.mkdir()
+    outside_dir = tmp_path / "outside"
+    outside_dir.mkdir()
+
+    monkeypatch.setattr(config.paths, "download_dir", str(dl_root))
+    monkeypatch.setattr(config.paths, "allowed_output_roots", [str(allowed_custom)])
+    monkeypatch.setattr(config.paths, "allow_any_output_dir", False)
+
+    # 1. Traversal escape rejected
+    resp_escape = client.post("/api/download", json={
+        "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        "output_dir": "../../../../etc"
+    })
+    assert resp_escape.status_code == 400
+    assert "Invalid output_dir" in resp_escape.json()["detail"]
+
+    # 2. Arbitrary outside absolute dir rejected
+    resp_outside = client.post("/api/download", json={
+        "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        "output_dir": str(outside_dir)
+    })
+    assert resp_outside.status_code == 400
+
+    # 3. Subfolder within download_dir accepted
+    sub_dl = "subfolder/project"
+    resp_dl = client.post("/api/download", json={
+        "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        "output_dir": sub_dl
+    })
+    assert resp_dl.status_code == 200
+
+    # 4. Folder within allowed_output_roots accepted and recognized as safe download path
+    custom_sub = allowed_custom / "music"
+    custom_sub.mkdir()
+    custom_file = custom_sub / "track.mp3"
+    custom_file.write_text("dummy")
+
+    resp_custom = client.post("/api/download", json={
+        "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        "output_dir": str(custom_sub)
+    })
+    assert resp_custom.status_code == 200
+    assert database.is_safe_download_path(str(custom_file)) is True
+

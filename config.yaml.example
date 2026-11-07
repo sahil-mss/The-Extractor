@@ -20,6 +20,8 @@ paths:
   log_file: "extractor.log"   # Path to application log file
   cookies_file: ""            # Optional path to cookies.txt (e.g. "cookies.txt")
   audacity_path: ""           # Optional explicit path to Audacity executable (auto-detected if empty)
+  allowed_output_roots: []    # Whitelist of allowed custom output root directories (downloads dir always allowed)
+  allow_any_output_dir: false # Allow arbitrary output directory (only effective on loopback/localhost)
 
 defaults:
   video_resolution: "best"    # Options: "best", "1080p", "720p", "480p"

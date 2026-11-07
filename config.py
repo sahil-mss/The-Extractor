@@ -50,6 +50,8 @@ class PathsConfig(BaseModel):
     log_file: str = "extractor.log"
     cookies_file: str = ""
     audacity_path: str = ""
+    allowed_output_roots: list[str] = Field(default_factory=list)
+    allow_any_output_dir: bool = False
 
 class DefaultsConfig(BaseModel):
     video_resolution: str = "best"
