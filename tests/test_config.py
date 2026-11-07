@@ -99,7 +99,7 @@ def test_auto_update_ytdlp_if_enabled(monkeypatch):
     monkeypatch.setenv("EXTRACTOR_AUTO_UPDATE_YTDLP", "1")
     main.auto_update_ytdlp_if_enabled()
     assert len(called_cmds) == 1
-    assert "yt-dlp" in called_cmds[0]
+    assert "yt-dlp[default]" in called_cmds[0]
     assert "--no-input" in called_cmds[0]
     assert "--disable-pip-version-check" in called_cmds[0]
     assert run_kwargs.get("timeout") == 120

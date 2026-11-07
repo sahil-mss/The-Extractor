@@ -27,7 +27,7 @@ def auto_update_ytdlp_if_enabled():
                 "-U",
                 "--disable-pip-version-check",
                 "--no-input",
-                "yt-dlp",
+                "yt-dlp[default]",
             ]
             subprocess.run(cmd, check=True, timeout=120)
             print("  ✅ yt-dlp updated successfully.")
@@ -121,7 +121,7 @@ def main():
         if ytdlp_status.get("is_outdated"):
             inst_v = ytdlp_status['installed']
             latest_v = ytdlp_status['latest']
-            print(f"  ⚠️  NOTICE: yt-dlp is outdated ({inst_v} -> {latest_v}). Run: pip install --upgrade yt-dlp")
+            print(f"  ⚠️  NOTICE: yt-dlp is outdated ({inst_v} -> {latest_v}). Run: pip install --upgrade \"yt-dlp[default]\"")
         elif ytdlp_status.get("checked"):
             print(f"  ✅ yt-dlp:  Up to date ({ytdlp_status['installed']})")
     except Exception:
