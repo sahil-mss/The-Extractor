@@ -107,4 +107,4 @@ jobs:
 
       - name: Run Pytest with Deprecation Warnings as Errors
         run: |
-          pytest -q -W error::DeprecationWarning
+          pytest -q -W error::DeprecationWarning -W "ignore:The anyio.abc.BlockingPortal alias is deprecated:DeprecationWarning:starlette.testclient"
