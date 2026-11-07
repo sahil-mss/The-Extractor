@@ -105,49 +105,55 @@ AUTH_FAILURES_LOCK = threading.Lock()
 AUTH_FAILURES: dict[str, list[float]] = {}
 AUTH_BLOCKED_UNTIL: dict[str, float] = {}
 
-def validate_and_resolve_output_dir(requested_dir: str | None, client_host: str | None = None) -> str:
+def is_direct_loopback(request: Request | None) -> bool:
+    """Determine if a request is directly originating from a loopback peer without proxy forwarding."""
+    if request is None or not request.client:
+        return not is_non_localhost(config.app.host)
+    peer = request.client.host
+    try:
+        if not ipaddress.ip_address(peer).is_loopback:
+            return False
+    except ValueError:
+        return False
+
+    proxy_headers = ("x-forwarded-for", "forwarded", "x-real-ip")
+    return not any(h in request.headers for h in proxy_headers)
+
+
+def validate_and_resolve_output_dir(requested_dir: str | None, request: Request | None = None) -> str:
     """Validate requested output_dir against security boundaries and resolve it.
 
     Rules:
     - Default to config.absolute_download_dir if omitted.
-    - If paths.allow_any_output_dir is True AND host is loopback, arbitrary dirs are permitted.
+    - If paths.allow_any_output_dir is True AND host is direct loopback, arbitrary dirs are permitted.
     - Otherwise, the resolved directory must be relative to one of the allowed roots
       (paths.download_dir or paths.allowed_output_roots).
     - If valid custom root, records it in known_output_dirs table so delete/Audacity allows it.
+    - Returns realpath of target directory.
     """
     from pathlib import Path
 
     raw = (requested_dir or "").strip()
     if not raw:
-        return config.absolute_download_dir
+        return os.path.realpath(config.absolute_download_dir)
 
     if os.path.isabs(raw):
         target_abs = os.path.abspath(raw)
     else:
         target_abs = os.path.abspath(os.path.join(config.absolute_download_dir, raw))
 
-    real_target_str = os.path.normcase(os.path.realpath(target_abs))
+    resolved_target = os.path.realpath(target_abs)
+    real_target_str = os.path.normcase(resolved_target)
     target_path = Path(real_target_str)
 
-    # Determine if loopback host
-    is_loopback = False
-    if client_host:
-        ch = client_host.strip().lower()
-        if ch in ("127.0.0.1", "localhost", "::1", "testclient"):
-            is_loopback = True
-        else:
-            try:
-                is_loopback = ipaddress.ip_address(ch).is_loopback
-            except ValueError:
-                is_loopback = False
-    elif not is_non_localhost(config.app.host):
-        is_loopback = True
+    # Determine if direct loopback host
+    is_loopback = is_direct_loopback(request)
 
     # If allow_any_output_dir is True and loopback host, allow and record
     allow_any = getattr(config.paths, "allow_any_output_dir", False) and is_loopback
     if allow_any:
-        database.record_known_output_dir(target_abs)
-        return target_abs
+        database.record_known_output_dir(resolved_target)
+        return resolved_target
 
     # Otherwise must be relative to an allowed root
     allowed_roots = [os.path.normcase(os.path.realpath(os.path.abspath(config.absolute_download_dir)))]
@@ -159,8 +165,8 @@ def validate_and_resolve_output_dir(requested_dir: str | None, client_host: str 
         root_path = Path(root_str)
         try:
             if target_path.is_relative_to(root_path):
-                database.record_known_output_dir(target_abs)
-                return target_abs
+                database.record_known_output_dir(resolved_target)
+                return resolved_target
         except ValueError:
             continue
 
@@ -712,8 +718,7 @@ def api_download(req: DownloadRequest, request: Request = None, authorized: bool
     if not valid:
         raise HTTPException(status_code=400, detail=err_msg)
 
-    client_ip = get_client_ip(request) if request is not None else None
-    validate_and_resolve_output_dir(req.output_dir, client_host=client_ip)
+    validate_and_resolve_output_dir(req.output_dir, request=request)
 
     task_id = enqueue_download(req)
     return {"status": "started", "task_id": task_id}
@@ -724,8 +729,7 @@ def api_batch_download(req: BatchDownloadRequest, request: Request = None, autho
     if not raw_urls:
         raise HTTPException(status_code=400, detail="At least one URL is required")
 
-    client_ip = get_client_ip(request) if request is not None else None
-    validate_and_resolve_output_dir(req.output_dir, client_host=client_ip)
+    validate_and_resolve_output_dir(req.output_dir, request=request)
 
     # Enforce max batch size limit
     if len(raw_urls) > config.processing.max_batch_size:
@@ -1011,20 +1015,7 @@ def api_browse_folder(request: Request, authorized: bool = Depends(verify_api_ke
     Runs in a separate subprocess to avoid blocking worker threads or aborting on macOS main thread.
     Enforces a 120-second timeout.
     """
-    client_ip = get_client_ip(request)
-    # Allow only loopback host
-    is_loopback = False
-    if client_ip:
-        ch = client_ip.strip().lower()
-        if ch in ("127.0.0.1", "localhost", "::1", "testclient"):
-            is_loopback = True
-        else:
-            try:
-                is_loopback = ipaddress.ip_address(ch).is_loopback
-            except ValueError:
-                is_loopback = False
-
-    if not is_loopback:
+    if not is_direct_loopback(request):
         raise HTTPException(status_code=403, detail="Folder picker dialog is only accessible from localhost")
 
     default_dir = config.absolute_download_dir

@@ -2,7 +2,7 @@ from fastapi.testclient import TestClient
 
 from server import app
 
-client = TestClient(app)
+client = TestClient(app, client=("127.0.0.1", 50000))
 
 def test_healthz_endpoint():
     response = client.get("/healthz")
@@ -127,8 +127,8 @@ def test_auth_failure_throttle(monkeypatch):
     from config import config
 
     monkeypatch.setattr(config.app, "api_key", "secret-test-key")
-    # Mark testclient's default peer IP (testclient) as trusted proxy so X-Forwarded-For is honored
-    monkeypatch.setattr(config.security, "trusted_proxies", ["testclient"])
+    # Mark testclient's default peer IP (127.0.0.1) as trusted proxy so X-Forwarded-For is honored
+    monkeypatch.setattr(config.security, "trusted_proxies", ["127.0.0.1"])
 
     with server.AUTH_FAILURES_LOCK:
         server.AUTH_FAILURES.clear()
@@ -330,6 +330,28 @@ def test_output_dir_validation_and_safety(tmp_path, monkeypatch):
     })
     assert resp_custom.status_code == 200
     assert database.is_safe_download_path(str(custom_file)) is True
+
+    # 5. Direct loopback vs proxy forwarded for allow_any_output_dir
+    monkeypatch.setattr(config.paths, "allow_any_output_dir", True)
+    arbitrary_dir = tmp_path / "arbitrary_test_dir"
+    arbitrary_dir.mkdir()
+
+    # Direct loopback (without proxy headers) -> Allowed
+    resp_loopback = client.post("/api/download", json={
+        "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        "output_dir": str(arbitrary_dir)
+    })
+    assert resp_loopback.status_code == 200
+
+    # Behind reverse proxy (carrying X-Forwarded-For or X-Real-IP) -> Rejected (400)
+    resp_proxied = client.post(
+        "/api/download",
+        json={"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ", "output_dir": str(arbitrary_dir)},
+        headers={"X-Forwarded-For": "203.0.113.195"}
+    )
+    assert resp_proxied.status_code == 400
+    assert "Invalid output_dir" in resp_proxied.json()["detail"]
+
 
 
 def test_snippet_clips_validation_and_range_func(monkeypatch):
