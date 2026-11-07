@@ -457,4 +457,48 @@ def test_ffmpeg_available(monkeypatch):
     assert ffmpeg_available() is False
 
 
+def test_storage_stats_caching(tmp_path, monkeypatch):
+    import os
+
+    import downloader
+
+    test_dir = str(tmp_path / "downloads")
+    os.makedirs(test_dir, exist_ok=True)
+    f1 = os.path.join(test_dir, "test1.mp4")
+    with open(f1, "wb") as f:
+        f.write(b"0" * 1024)
+
+    # Invalidate cache first
+    downloader.invalidate_storage_stats_cache()
+
+    scanned_count = 0
+    orig_scandir = os.scandir
+
+    def counted_scandir(path):
+        nonlocal scanned_count
+        scanned_count += 1
+        return orig_scandir(path)
+
+    monkeypatch.setattr(os, "scandir", counted_scandir)
+
+    # 1. First call: scans directory
+    stats1 = downloader.get_storage_stats(test_dir)
+    assert stats1["file_count"] == 1
+    assert stats1["total_bytes"] == 1024
+    initial_scans = scanned_count
+    assert initial_scans >= 1
+
+    # 2. Second call immediately: uses TTL cache (no new scandir calls)
+    stats2 = downloader.get_storage_stats(test_dir)
+    assert stats2["file_count"] == 1
+    assert scanned_count == initial_scans
+
+    # 3. Invalidate cache: next call must scan again
+    downloader.invalidate_storage_stats_cache()
+    stats3 = downloader.get_storage_stats(test_dir)
+    assert stats3["file_count"] == 1
+    assert scanned_count > initial_scans
+
+
+
 

@@ -328,9 +328,32 @@ def check_ytdlp_version(force_refresh: bool = False) -> dict[str, Any]:
         return result
 
 
+_STORAGE_STATS_CACHE: dict[str, Any] = {}
+_STORAGE_STATS_CACHE_TIME: float = 0.0
+_STORAGE_STATS_LOCK = threading.Lock()
+
+
+def invalidate_storage_stats_cache():
+    """Invalidate storage stats cache immediately after file downloads or deletions."""
+    global _STORAGE_STATS_CACHE_TIME
+    with _STORAGE_STATS_LOCK:
+        _STORAGE_STATS_CACHE_TIME = 0.0
+
+
 def get_storage_stats(directory: str | None = None) -> dict[str, Any]:
-    """Calculate disk storage usage for downloads directory and host drive."""
+    """Calculate disk storage usage for downloads directory and host drive with 30s TTL cache."""
+    global _STORAGE_STATS_CACHE, _STORAGE_STATS_CACHE_TIME
     target_dir = os.path.abspath(directory or config.absolute_download_dir)
+
+    now = time.time()
+    with _STORAGE_STATS_LOCK:
+        if (
+            _STORAGE_STATS_CACHE
+            and _STORAGE_STATS_CACHE.get("directory") == target_dir
+            and (now - _STORAGE_STATS_CACHE_TIME) < 30.0
+        ):
+            return dict(_STORAGE_STATS_CACHE)
+
     os.makedirs(target_dir, exist_ok=True)
 
     def scan_dir(path: str) -> tuple[int, int]:
@@ -366,7 +389,7 @@ def get_storage_stats(directory: str | None = None) -> dict[str, Any]:
         disk_free_gb = 0.0
         disk_total_gb = 0.0
 
-    return {
+    result = {
         "directory": target_dir,
         "file_count": file_count,
         "total_bytes": total_bytes,
@@ -378,6 +401,12 @@ def get_storage_stats(directory: str | None = None) -> dict[str, Any]:
         "max_storage_gb": config.storage.max_storage_gb,
         "delete_after_days": config.storage.delete_after_days,
     }
+
+    with _STORAGE_STATS_LOCK:
+        _STORAGE_STATS_CACHE = dict(result)
+        _STORAGE_STATS_CACHE_TIME = now
+
+    return result
 
 
 def perform_storage_cleanup(
@@ -476,6 +505,7 @@ def perform_storage_cleanup(
             database.null_deleted_file_paths(deleted_paths)
         except Exception:
             pass
+        invalidate_storage_stats_cache()
 
     return {
         "deleted_files": deleted_count,
@@ -1107,6 +1137,7 @@ def download_media_bundle(
     if progress_hook:
         progress_hook({'phase': 'finished', 'message': 'All operations completed successfully!'})
 
+    invalidate_storage_stats_cache()
     return results
 
 
