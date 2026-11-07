@@ -546,7 +546,7 @@ def get_base_ydl_opts(cookies_path: str | None = None) -> dict[str, Any]:
         'socket_timeout': 30,
         'retries': config.processing.max_retries,
         'fragment_retries': config.processing.max_retries,
-        'concurrent_fragment_downloads': 16,  # 16-thread multi-part chunk downloads for maximum speed
+        'concurrent_fragment_downloads': getattr(config.processing, "fragment_threads", 4),
         'buffersize': 1024 * 512,  # 512 KB memory buffer for high-speed streaming
         'http_chunk_size': 10485760,  # 10 MB chunk size for steady high-bandwidth throughput
         'nocheckcertificate': False,  # Strict SSL security verification

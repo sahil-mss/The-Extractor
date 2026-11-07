@@ -1,5 +1,7 @@
 import os
 
+import pytest
+
 from config import Config, load_config
 
 
@@ -111,3 +113,24 @@ def test_auto_update_ytdlp_if_enabled(monkeypatch):
     monkeypatch.setattr("subprocess.run", mock_run_timeout)
     # Must catch gracefully without raising
     main.auto_update_ytdlp_if_enabled()
+
+
+def test_fragment_threads_config(monkeypatch):
+    import downloader
+    from config import Config
+
+    cfg = Config()
+    assert cfg.processing.fragment_threads == 4
+
+    # Test bounds
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):
+        Config(processing={"fragment_threads": 0})
+    with pytest.raises(ValidationError):
+        Config(processing={"fragment_threads": 17})
+
+    # Verify downloader passes it into base ydl opts
+    monkeypatch.setattr(downloader.config.processing, "fragment_threads", 8)
+    opts = downloader.get_base_ydl_opts()
+    assert opts["concurrent_fragment_downloads"] == 8
+

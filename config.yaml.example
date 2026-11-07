@@ -40,6 +40,7 @@ processing:
   max_queue_size: 500         # Maximum pending tasks in queue
   task_retention_minutes: 10  # Automatically purge completed/failed task state from memory after N minutes
   task_timeout_minutes: 60    # Timeout for long-running / hung downloads before marking error
+  fragment_threads: 4         # Concurrent chunk download threads per media file (1-16; higher can trigger rate limits)
 
 storage:
   max_storage_gb: 0.0         # Max storage for downloads/ (0.0 for unlimited, e.g. 10.0 for 10GB cap)
