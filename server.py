@@ -14,10 +14,12 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 import database
 import downloader
@@ -55,6 +57,26 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Sanitize validation error details to ensure JSON-compliance."""
+    import math
+
+    def sanitize(val):
+        if isinstance(val, float) and (math.isnan(val) or math.isinf(val)):
+            return str(val)
+        if isinstance(val, (int, str, bool)) or val is None:
+            return val
+        if isinstance(val, dict):
+            return {str(k): sanitize(v) for k, v in val.items()}
+        if isinstance(val, (list, tuple, set)):
+            return [sanitize(v) for v in val]
+        return str(val)
+
+    safe_errors = sanitize(exc.errors())
+    return JSONResponse(status_code=422, content={"detail": safe_errors})
 
 
 @app.middleware("http")
@@ -309,8 +331,8 @@ class BaseMediaRequest(BaseModel):
     video_resolution: str = config.defaults.video_resolution
     audio_format: str = config.defaults.audio_format
     audio_bitrate: str = config.defaults.audio_bitrate
-    start_time: float | None = None
-    end_time: float | None = None
+    start_time: float | None = Field(None, ge=0, allow_inf_nan=False)
+    end_time: float | None = Field(None, gt=0, le=86400, allow_inf_nan=False)
     output_dir: str | None = None
 
     @field_validator("video_resolution")
@@ -341,7 +363,7 @@ class BaseMediaRequest(BaseModel):
     def validate_at_least_one_output(self) -> "BaseMediaRequest":
         if not (self.download_video or self.download_audio or self.download_doc or self.download_json):
             raise ValueError("At least one output option (video, audio, metadata document, or JSON) must be enabled")
-        if self.start_time is not None and self.end_time is not None and self.end_time <= self.start_time:
+        if self.start_time is not None and self.end_time is not None and self.start_time >= self.end_time:
             raise ValueError("Snippet end_time must be greater than start_time")
         return self
 

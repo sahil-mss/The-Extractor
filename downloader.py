@@ -1012,7 +1012,8 @@ def download_media_bundle(
         })
 
         if is_snippet:
-            video_opts['download_ranges'] = yt_dlp.utils.download_range_func(None, [(start_time or 0.0, end_time)])
+            eff_end = end_time if end_time is not None else float("inf")
+            video_opts['download_ranges'] = yt_dlp.utils.download_range_func(None, [(start_time or 0.0, eff_end)])
             video_opts['force_keyframes_at_cuts'] = True
 
         try:
@@ -1071,7 +1072,8 @@ def download_media_bundle(
         })
 
         if is_snippet:
-            audio_opts['download_ranges'] = yt_dlp.utils.download_range_func(None, [(start_time or 0.0, end_time)])
+            eff_end = end_time if end_time is not None else float("inf")
+            audio_opts['download_ranges'] = yt_dlp.utils.download_range_func(None, [(start_time or 0.0, eff_end)])
             audio_opts['force_keyframes_at_cuts'] = True
 
         try:

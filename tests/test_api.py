@@ -277,7 +277,11 @@ def test_api_download_with_snippet_and_json(monkeypatch):
 
 def test_output_dir_validation_and_safety(tmp_path, monkeypatch):
     import database
+    import downloader
     from config import config
+
+    # Mock download_media_bundle so worker thread does not download real video over network
+    monkeypatch.setattr(downloader, "download_media_bundle", lambda **kwargs: {})
 
     # Set up dedicated downloads root
     dl_root = tmp_path / "downloads"
@@ -326,4 +330,66 @@ def test_output_dir_validation_and_safety(tmp_path, monkeypatch):
     })
     assert resp_custom.status_code == 200
     assert database.is_safe_download_path(str(custom_file)) is True
+
+
+def test_snippet_clips_validation_and_range_func(monkeypatch):
+    import yt_dlp
+
+    import downloader
+
+    # Mock download_media_bundle so worker thread does not download real video over network
+    monkeypatch.setattr(downloader, "download_media_bundle", lambda **kwargs: {})
+
+    # 1. Start-only valid payload
+    resp_start_only = client.post("/api/download", json={
+        "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        "start_time": 30.0,
+        "end_time": None
+    })
+    assert resp_start_only.status_code == 200
+
+    # 2. End-only valid payload
+    resp_end_only = client.post("/api/download", json={
+        "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        "start_time": None,
+        "end_time": 60.0
+    })
+    assert resp_end_only.status_code == 200
+
+    # 3. Negative start time rejected (422)
+    resp_neg_start = client.post("/api/download", json={
+        "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        "start_time": -5.0
+    })
+    assert resp_neg_start.status_code == 422
+
+    # 4. NaN rejected (422) via raw JSON payload
+    resp_nan = client.post(
+        "/api/download",
+        content='{"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ", "start_time": NaN}',
+        headers={"Content-Type": "application/json"}
+    )
+    assert resp_nan.status_code == 422
+
+    # 5. Huge values exceeding 86400 (24h) rejected (422)
+    resp_huge = client.post("/api/download", json={
+        "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        "end_time": 1e308
+    })
+    assert resp_huge.status_code == 422
+
+    # 6. start_time >= end_time rejected (422)
+    resp_inverted = client.post("/api/download", json={
+        "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        "start_time": 50.0,
+        "end_time": 40.0
+    })
+    assert resp_inverted.status_code == 422
+
+    # 7. Test download_range_func with start-only (end = inf)
+    range_fn = yt_dlp.utils.download_range_func(None, [(30.0, float("inf"))])
+    ranges = list(range_fn({"duration": 120}, None))
+    assert len(ranges) == 1
+    assert ranges[0]["start_time"] == 30.0
+    assert ranges[0]["end_time"] == float("inf")
 
