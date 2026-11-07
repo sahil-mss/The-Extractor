@@ -388,6 +388,7 @@ def get_storage_stats(directory: str | None = None) -> dict[str, Any]:
 
     result = {
         "directory": target_dir,
+        "is_default_download_dir": os.path.normcase(target_dir) == os.path.normcase(os.path.realpath(os.path.abspath(config.absolute_download_dir))),
         "file_count": file_count,
         "total_bytes": total_bytes,
         "total_mb": round(total_bytes / (1024 ** 2), 2),
@@ -397,6 +398,7 @@ def get_storage_stats(directory: str | None = None) -> dict[str, Any]:
         "disk_used_percent": disk_used_percent,
         "max_storage_gb": config.storage.max_storage_gb,
         "delete_after_days": config.storage.delete_after_days,
+        "note": "Stats and cleanup cover the active download directory; external custom folders outside this tree are not purged automatically.",
     }
 
     with _STORAGE_STATS_LOCK:

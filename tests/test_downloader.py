@@ -173,6 +173,8 @@ def test_storage_stats_and_cleanup(tmp_path):
     stats = get_storage_stats(str(tmp_path))
     assert stats["file_count"] == 4
     assert stats["total_bytes"] == 3007
+    assert "note" in stats
+    assert "is_default_download_dir" in stats
 
     # Cleanup by age: delete older than 5 days
     cleanup_res = perform_storage_cleanup(str(tmp_path), delete_after_days=5)

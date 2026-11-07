@@ -1332,6 +1332,7 @@ navSettingsBtn.addEventListener("click", async () => {
         <div class="settings-param-row">
           <span class="settings-label">Disk Storage</span>
           <span><code>${storage.total_mb || 0} MB</code> (${storage.file_count || 0} files) • Drive Free: <code>${storage.disk_free_gb || 0} GB</code></span>
+          <span style="font-size:0.75rem; color:var(--text-muted);">Scope: Default downloads dir (external custom folders are excluded from auto-purge)</span>
         </div>
         <div class="settings-param-row">
           <span class="settings-label">Retention Policy</span>
