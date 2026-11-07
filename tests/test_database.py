@@ -110,3 +110,36 @@ def test_init_db_migration_pragma_check(tmp_path):
     database.init_db()
 
 
+def test_known_output_dirs_trust_revocation(tmp_path, monkeypatch):
+    from config import config
+
+    test_db = str(tmp_path / "trust_revocation.db")
+    database.DB_PATH = test_db
+    database.init_db()
+
+    arbitrary_root = tmp_path / "temporary_custom_root"
+    arbitrary_root.mkdir()
+    sample_file = arbitrary_root / "sample.mp3"
+    sample_file.write_text("test audio")
+
+    # 1. When allow_any_output_dir is True, recording it with source="allow_any" makes it safe
+    monkeypatch.setattr(config.paths, "allow_any_output_dir", True)
+    database.record_known_output_dir(str(arbitrary_root), source="allow_any")
+    assert database.is_safe_download_path(str(sample_file)) is True
+
+    # 2. When allow_any_output_dir is turned False, trust is revoked immediately
+    monkeypatch.setattr(config.paths, "allow_any_output_dir", False)
+    assert database.is_safe_download_path(str(sample_file)) is False
+
+    # 3. But if recorded as an exact file in extraction_history, exact matching recognizes it
+    assert database.is_known_media_file_in_history(str(sample_file)) is False
+    database.record_task_completed(
+        "task-abc",
+        "https://youtube.com/watch?v=sample123",
+        {"id": "sample123", "title": "Sample"},
+        {"audio_file": str(sample_file)}
+    )
+    assert database.is_known_media_file_in_history(str(sample_file)) is True
+
+
+

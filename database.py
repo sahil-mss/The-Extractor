@@ -53,14 +53,21 @@ def init_db():
         if "json_path" not in columns:
             conn.execute("ALTER TABLE extraction_history ADD COLUMN json_path TEXT")
 
-        # Table for accepted custom output directories
+        # Table for accepted custom output directories with source tracking
         conn.execute("""
         CREATE TABLE IF NOT EXISTS known_output_dirs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             path TEXT UNIQUE NOT NULL,
+            source TEXT DEFAULT 'root',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """)
+
+        # Migration: Ensure source column exists in known_output_dirs
+        pragma_dirs = conn.execute("PRAGMA table_info(known_output_dirs)")
+        dir_columns = [row[1] for row in pragma_dirs.fetchall()]
+        if "source" not in dir_columns:
+            conn.execute("ALTER TABLE known_output_dirs ADD COLUMN source TEXT DEFAULT 'root'")
 
         # Mark any tasks left in 'queued' or 'running' state from previous crash/restart as 'interrupted'
         conn.execute("""
@@ -158,19 +165,36 @@ def record_task_completed(
             completed_at
         ))
 
-def record_known_output_dir(dir_path: str) -> None:
+def record_known_output_dir(dir_path: str, source: str = "root") -> None:
     """Record an approved custom output directory in the database."""
     if not dir_path:
         return
     real_p = os.path.normcase(os.path.realpath(os.path.abspath(dir_path)))
     with get_db_connection() as conn:
-        conn.execute("INSERT OR IGNORE INTO known_output_dirs (path) VALUES (?)", (real_p,))
+        conn.execute(
+            "INSERT INTO known_output_dirs (path, source) VALUES (?, ?) "
+            "ON CONFLICT(path) DO UPDATE SET source = excluded.source",
+            (real_p, source),
+        )
 
 
-def get_known_output_dirs() -> set[str]:
-    """Retrieve all recorded approved custom output directories."""
+def get_known_output_dirs(only_source: str | None = None) -> set[str]:
+    """Retrieve recorded approved custom output directories."""
     with get_db_connection() as conn:
-        cursor = conn.execute("SELECT path FROM known_output_dirs")
+        if only_source:
+            cursor = conn.execute("SELECT path FROM known_output_dirs WHERE source = ?", (only_source,))
+        else:
+            cursor = conn.execute("SELECT path, source FROM known_output_dirs")
+            rows = cursor.fetchall()
+            allow_any = getattr(config.paths, "allow_any_output_dir", False)
+            valid_dirs = set()
+            for path, src in rows:
+                if src == "allow_any":
+                    if allow_any:
+                        valid_dirs.add(path)
+                else:
+                    valid_dirs.add(path)
+            return valid_dirs
         return {row[0] for row in cursor.fetchall()}
 
 
@@ -190,16 +214,35 @@ def is_safe_download_path(file_path: str) -> bool:
             if extra:
                 allowed_dirs.append(os.path.normcase(os.path.realpath(os.path.abspath(extra))))
 
-        # Add dynamically recorded known output dirs
+        # Add valid dynamically recorded known output dirs (checking source validity)
         allowed_dirs.extend(get_known_output_dirs())
 
         for d in allowed_dirs:
             root = Path(d)
-            if real_target.is_relative_to(root) and real_target != root:
+            if (real_target.is_relative_to(root) and real_target != root) or real_target == root:
                 return True
         return False
     except Exception:
         return False
+
+
+def is_known_media_file_in_history(file_path: str) -> bool:
+    """Exact match check if a file path was generated and recorded in extraction_history."""
+    if not file_path:
+        return False
+    real_f = os.path.normcase(os.path.realpath(os.path.abspath(file_path)))
+    with get_db_connection() as conn:
+        cursor = conn.execute(
+            "SELECT video_path, audio_path, doc_md_path, doc_txt_path, json_path "
+            "FROM extraction_history WHERE audio_path IS NOT NULL OR video_path IS NOT NULL"
+        )
+        for row in cursor.fetchall():
+            for p in row:
+                if p:
+                    cand = os.path.normcase(os.path.realpath(os.path.abspath(p)))
+                    if cand == real_f:
+                        return True
+    return False
 
 def get_history(limit: int = 50, offset: int = 0, search: str | None = None) -> list[dict[str, Any]]:
     with get_db_connection() as conn:

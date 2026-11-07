@@ -152,7 +152,7 @@ def validate_and_resolve_output_dir(requested_dir: str | None, request: Request 
     # If allow_any_output_dir is True and loopback host, allow and record
     allow_any = getattr(config.paths, "allow_any_output_dir", False) and is_loopback
     if allow_any:
-        database.record_known_output_dir(resolved_target)
+        database.record_known_output_dir(resolved_target, source="allow_any")
         return resolved_target
 
     # Otherwise must be relative to an allowed root
@@ -165,7 +165,7 @@ def validate_and_resolve_output_dir(requested_dir: str | None, request: Request 
         root_path = Path(root_str)
         try:
             if target_path.is_relative_to(root_path):
-                database.record_known_output_dir(resolved_target)
+                database.record_known_output_dir(resolved_target, source="root")
                 return resolved_target
         except ValueError:
             continue
@@ -1084,8 +1084,8 @@ def api_open_audacity(req: AudacityRequest, authorized: bool = Depends(verify_ap
             audio_files.sort(key=os.path.getmtime, reverse=True)
             target_file = audio_files[0]
 
-    # Validate that target_file is within downloads directory
-    if target_file and not database.is_safe_download_path(target_file):
+    # Validate that target_file is a safe download path or is recorded in extraction history
+    if target_file and not (database.is_safe_download_path(target_file) or database.is_known_media_file_in_history(target_file)):
         raise HTTPException(status_code=403, detail="Forbidden file path")
 
     try:
