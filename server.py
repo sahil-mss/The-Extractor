@@ -1007,50 +1007,59 @@ def api_clear_history(delete_files: bool = False, authorized: bool = Depends(ver
     database.clear_all_history(delete_files=delete_files)
     return {"status": "success", "message": "History cleared"}
 
+# Module-level concurrency guard for folder picker dialog
+FOLDER_PICKER_LOCK = threading.Lock()
+
 # OS Integration Endpoints
 @app.post("/api/browse-folder")
 def api_browse_folder(request: Request, authorized: bool = Depends(verify_api_key)):
     """Opens a native OS folder picker dialog via a subprocess on loopback hosts only.
 
     Runs in a separate subprocess to avoid blocking worker threads or aborting on macOS main thread.
-    Enforces a 120-second timeout.
+    Enforces a 120-second timeout. Guarded by a non-blocking lock to reject concurrent dialog spawns.
     """
     if not is_direct_loopback(request):
         raise HTTPException(status_code=403, detail="Folder picker dialog is only accessible from localhost")
 
-    default_dir = config.absolute_download_dir
-    script = (
-        "import os, sys\n"
-        "try:\n"
-        "    import tkinter as tk\n"
-        "    from tkinter import filedialog\n"
-        "    root = tk.Tk()\n"
-        "    root.withdraw()\n"
-        "    root.attributes('-topmost', True)\n"
-        "    init_dir = sys.argv[1] if len(sys.argv) > 1 and os.path.exists(sys.argv[1]) else None\n"
-        "    folder = filedialog.askdirectory(initialdir=init_dir, title='Select Download Directory')\n"
-        "    root.destroy()\n"
-        "    print(folder or '')\n"
-        "except Exception:\n"
-        "    print('')\n"
-    )
+    if not FOLDER_PICKER_LOCK.acquire(blocking=False):
+        raise HTTPException(status_code=409, detail="A folder picker is already open")
 
-    selected_dir = ""
     try:
-        res = subprocess.run(
-            [sys.executable, "-c", script, default_dir],
-            capture_output=True,
-            text=True,
-            timeout=120,
-            check=False,
+        default_dir = config.absolute_download_dir
+        script = (
+            "import os, sys\n"
+            "try:\n"
+            "    import tkinter as tk\n"
+            "    from tkinter import filedialog\n"
+            "    root = tk.Tk()\n"
+            "    root.withdraw()\n"
+            "    root.attributes('-topmost', True)\n"
+            "    init_dir = sys.argv[1] if len(sys.argv) > 1 and os.path.exists(sys.argv[1]) else None\n"
+            "    folder = filedialog.askdirectory(initialdir=init_dir, title='Select Download Directory')\n"
+            "    root.destroy()\n"
+            "    print(folder or '')\n"
+            "except Exception:\n"
+            "    print('')\n"
         )
-        selected_dir = (res.stdout or "").strip()
-    except subprocess.TimeoutExpired:
-        logger.warning("Folder picker dialog timed out after 120 seconds")
-    except Exception as e:
-        logger.warning(f"Native browse-folder dialog subprocess failed: {e}")
 
-    return {"status": "success", "folder": selected_dir or ""}
+        selected_dir = ""
+        try:
+            res = subprocess.run(
+                [sys.executable, "-c", script, default_dir],
+                capture_output=True,
+                text=True,
+                timeout=120,
+                check=False,
+            )
+            selected_dir = (res.stdout or "").strip()
+        except subprocess.TimeoutExpired:
+            logger.warning("Folder picker dialog timed out after 120 seconds")
+        except Exception as e:
+            logger.warning(f"Native browse-folder dialog subprocess failed: {e}")
+
+        return {"status": "success", "folder": selected_dir or ""}
+    finally:
+        FOLDER_PICKER_LOCK.release()
 
 @app.post("/api/open-folder")
 def api_open_folder(authorized: bool = Depends(verify_api_key)):

@@ -442,6 +442,17 @@ def test_api_browse_folder_subprocess_and_permissions(monkeypatch):
     assert resp_remote.status_code == 403
     assert "only accessible from localhost" in resp_remote.json()["detail"]
 
+    # 3. Concurrency guard rejects simultaneous folder picker spawns with 409
+    import server
+    assert server.FOLDER_PICKER_LOCK.acquire(blocking=False)
+    try:
+        resp_conflict = client.post("/api/browse-folder")
+        assert resp_conflict.status_code == 409
+        assert "already open" in resp_conflict.json()["detail"]
+    finally:
+        server.FOLDER_PICKER_LOCK.release()
+
+
 
 def test_comment_highlight_logic_in_frontend():
     # Read web/app.js to verify highlight() implementation doesn't double-escape or break HTML entities
