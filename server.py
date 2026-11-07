@@ -1,4 +1,5 @@
 import hmac
+import ipaddress
 import logging
 import os
 import platform
@@ -79,12 +80,50 @@ AUTH_FAILURES_LOCK = threading.Lock()
 AUTH_FAILURES: dict[str, list[float]] = {}
 AUTH_BLOCKED_UNTIL: dict[str, float] = {}
 
+def is_trusted_proxy(ip: str, trusted_list: list[str]) -> bool:
+    """Check if an IP address matches any trusted proxy IP or CIDR network."""
+    if not ip or not trusted_list:
+        return False
+    if ip in trusted_list:
+        return True
+    try:
+        ip_obj = ipaddress.ip_address(ip)
+    except ValueError:
+        return False
+    for item in trusted_list:
+        try:
+            if "/" in item:
+                if ip_obj in ipaddress.ip_network(item, strict=False):
+                    return True
+            else:
+                if ip_obj == ipaddress.ip_address(item):
+                    return True
+        except ValueError:
+            continue
+    return False
+
+
 def get_client_ip(request: Request) -> str:
-    """Extract client IP, preferring X-Forwarded-For if behind a reverse proxy."""
+    """Extract client IP, using request.client.host unless peer is a trusted proxy.
+
+    When the peer is trusted, take the rightmost X-Forwarded-For entry that is
+    not itself a trusted proxy.
+    """
+    peer_ip = request.client.host if request.client else "unknown"
+    trusted = getattr(config.security, "trusted_proxies", [])
+    if not trusted or not is_trusted_proxy(peer_ip, trusted):
+        return peer_ip
+
     forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
+    if not forwarded:
+        return peer_ip
+
+    entries = [entry.strip() for entry in forwarded.split(",") if entry.strip()]
+    for entry in reversed(entries):
+        if not is_trusted_proxy(entry, trusted):
+            return entry
+
+    return entries[0] if entries else peer_ip
 
 def check_auth_throttle(ip: str, now: float) -> None:
     """Raise 429 if IP is currently throttled due to excessive auth failures."""

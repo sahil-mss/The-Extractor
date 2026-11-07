@@ -41,6 +41,7 @@ class SecurityConfig(BaseModel):
     require_api_key_for_non_localhost: bool = True
     max_url_length: int = 2048
     min_api_key_length: int = 16
+    trusted_proxies: list[str] = Field(default_factory=list)
 
 
 class PathsConfig(BaseModel):

@@ -124,6 +124,8 @@ def test_auth_failure_throttle(monkeypatch):
     from config import config
 
     monkeypatch.setattr(config.app, "api_key", "secret-test-key")
+    # Mark testclient's default peer IP (testclient) as trusted proxy so X-Forwarded-For is honored
+    monkeypatch.setattr(config.security, "trusted_proxies", ["testclient"])
 
     with server.AUTH_FAILURES_LOCK:
         server.AUTH_FAILURES.clear()
@@ -157,6 +159,65 @@ def test_auth_failure_throttle(monkeypatch):
     with server.AUTH_FAILURES_LOCK:
         server.AUTH_FAILURES.clear()
         server.AUTH_BLOCKED_UNTIL.clear()
+
+
+def test_auth_spoofed_forwarded_for_untrusted_peer(monkeypatch):
+    import server
+    from config import config
+
+    monkeypatch.setattr(config.app, "api_key", "secret-test-key")
+    # Untrusted proxy: trusted_proxies is empty
+    monkeypatch.setattr(config.security, "trusted_proxies", [])
+
+    with server.AUTH_FAILURES_LOCK:
+        server.AUTH_FAILURES.clear()
+        server.AUTH_BLOCKED_UNTIL.clear()
+
+    # Attacker tries rotating X-Forwarded-For to bypass throttling
+    for i in range(9):
+        resp = client.get(
+            "/api/config",
+            headers={"X-API-Key": "wrong-key", "X-Forwarded-For": f"198.51.100.{i}"}
+        )
+        assert resp.status_code == 401
+
+    # On the 10th attempt, since peer IP is throttled (and spoofed header ignored), it must return 429
+    resp_10 = client.get(
+        "/api/config",
+        headers={"X-API-Key": "wrong-key", "X-Forwarded-For": "198.51.100.99"}
+    )
+    assert resp_10.status_code == 429
+
+    # Cleanup
+    with server.AUTH_FAILURES_LOCK:
+        server.AUTH_FAILURES.clear()
+        server.AUTH_BLOCKED_UNTIL.clear()
+
+
+def test_auth_forwarded_for_trusted_peer_chain(monkeypatch):
+    from starlette.requests import Request
+
+    import server
+    from config import config
+
+    trusted_proxy = "10.0.0.1"
+    monkeypatch.setattr(config.security, "trusted_proxies", [trusted_proxy, "10.0.0.2"])
+
+    # 1. Untrusted peer: returns client.host
+    req_untrusted = Request({
+        "type": "http",
+        "client": ("192.168.1.50", 12345),
+        "headers": [(b"x-forwarded-for", b"203.0.113.195, 10.0.0.1")]
+    })
+    assert server.get_client_ip(req_untrusted) == "192.168.1.50"
+
+    # 2. Trusted peer: returns rightmost non-trusted entry in chain
+    req_trusted = Request({
+        "type": "http",
+        "client": (trusted_proxy, 12345),
+        "headers": [(b"x-forwarded-for", b"203.0.113.195, 198.51.100.5, 10.0.0.2")]
+    })
+    assert server.get_client_ip(req_trusted) == "198.51.100.5"
 
 
 def test_api_comments_success(monkeypatch):

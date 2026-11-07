@@ -12,6 +12,7 @@ app:
 security:
   require_api_key_for_non_localhost: true
   max_url_length: 2048
+  trusted_proxies: []         # List of trusted reverse proxy IPs or CIDRs (e.g. ["127.0.0.1", "10.0.0.0/8"])
 
 paths:
   download_dir: "downloads"   # Path relative to workspace or absolute path
