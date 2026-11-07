@@ -181,7 +181,7 @@ def get_detected_js_runtime() -> dict[str, Any]:
                     "supported": False,
                 }
     except Exception:
-        pass
+        pass  # noqa: S110
 
     # 2. Fallback manual version detection and comparison
     candidates = [
@@ -197,7 +197,7 @@ def get_detected_js_runtime() -> dict[str, Any]:
         if not exe:
             continue
         try:
-            res = subprocess.run(
+            res = subprocess.run(  # noqa: S603
                 [exe, *args],
                 capture_output=True,
                 text=True,
@@ -217,7 +217,7 @@ def get_detected_js_runtime() -> dict[str, Any]:
                 "supported": is_supported,
             }
         except Exception:
-            continue
+            continue  # noqa: S112
 
     return {
         "available": False,
@@ -305,7 +305,7 @@ def check_ytdlp_version(force_refresh: bool = False) -> dict[str, Any]:
                 "https://pypi.org/pypi/yt-dlp/json",
                 headers={"User-Agent": "TheExtractor/2.8.0"}
             )
-            with urllib.request.urlopen(req, timeout=3.0) as resp:
+            with urllib.request.urlopen(req, timeout=3.0) as resp:  # noqa: S310
                 if resp.status == 200:
                     data = json.loads(resp.read().decode("utf-8"))
                     latest_ver = data.get("info", {}).get("version")
@@ -318,7 +318,7 @@ def check_ytdlp_version(force_refresh: bool = False) -> dict[str, Any]:
                             result["is_outdated"] = (latest_ver != installed_ver)
         except Exception:
             # Offline or PyPI unreachable: graceful fallback
-            pass
+            pass  # noqa: S110
 
         _YTDLP_VERSION_CACHE = dict(result)
         _YTDLP_VERSION_CACHE_TIME = now
@@ -503,7 +503,7 @@ def perform_storage_cleanup(
             import database
             database.null_deleted_file_paths(deleted_paths)
         except Exception:
-            pass
+            pass  # noqa: S110
         invalidate_storage_stats_cache()
 
     return {
@@ -675,7 +675,7 @@ def fetch_transcript_data(video_id: str, ydl_info: dict | None = None) -> list[d
                         })
         except Exception:
             # Non-fatal: transcript unavailable or network error
-            pass
+            pass  # noqa: S110
 
     return transcript_items
 

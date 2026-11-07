@@ -186,7 +186,7 @@ def load_config(config_path: str | None = None) -> Config:
                 if isinstance(loaded, dict):
                     data = loaded
         except Exception:
-            pass
+            pass  # noqa: S110
 
     # Environment variable overrides
     if "EXTRACTOR_DOWNLOAD_DIR" in os.environ:

@@ -47,7 +47,7 @@ def log(msg: str):
         with open(LOG_FILE, "a", encoding="utf-8") as f:
             f.write(formatted + "\n")
     except Exception:
-        pass
+        pass  # noqa: S110
 
 
 def get_base_python() -> list[str]:
@@ -73,7 +73,7 @@ def check_and_setup_venv() -> str:
         log("📦 Virtual environment (.venv) not found. Creating one for you...")
         base_py = get_base_python()
         try:
-            subprocess.run([*base_py, "-m", "venv", VENV_DIR], check=True, cwd=PROJECT_DIR)
+            subprocess.run([*base_py, "-m", "venv", VENV_DIR], check=True, cwd=PROJECT_DIR)  # noqa: S603
             log("✅ Virtual environment (.venv) created successfully.")
         except Exception as e:
             log(f"⚠️ Could not create virtual environment: {e}.")
@@ -91,7 +91,7 @@ def check_and_setup_venv() -> str:
     )
     deps_ready = False
     try:
-        res = subprocess.run(
+        res = subprocess.run(  # noqa: S603
             [venv_python, "-c", check_code],
             capture_output=True,
             text=True,
@@ -121,7 +121,7 @@ def check_and_setup_venv() -> str:
             "30",
         ]
         try:
-            subprocess.run(pip_cmd, check=True, cwd=PROJECT_DIR)
+            subprocess.run(pip_cmd, check=True, cwd=PROJECT_DIR)  # noqa: S603
             log("🎉 All requirements installed successfully!")
         except Exception as e:
             log(f"❌ Error installing requirements: {e}")
@@ -170,7 +170,7 @@ def main():
     # Pass any extra CLI arguments directly to main.py
     cmd = [target_python, os.path.join(PROJECT_DIR, "main.py"), *sys.argv[1:]]
     try:
-        subprocess.run(cmd, cwd=PROJECT_DIR)
+        subprocess.run(cmd, cwd=PROJECT_DIR)  # noqa: S603
     except KeyboardInterrupt:
         print()
         log("👋 The Extractor stopped by user. Goodbye!")

@@ -29,7 +29,7 @@ def auto_update_ytdlp_if_enabled():
                 "--no-input",
                 "yt-dlp[default]",
             ]
-            subprocess.run(cmd, check=True, timeout=120)
+            subprocess.run(cmd, check=True, timeout=120)  # noqa: S603
             print("  ✅ yt-dlp updated successfully.")
         except subprocess.TimeoutExpired:
             print("  ⚠️ Warning: yt-dlp update timed out after 120 seconds", file=sys.stderr)
@@ -63,7 +63,7 @@ def main():
     host = args.host
     port = args.port
     server_url = f"http://{host}:{port}"
-    browser_url = f"http://localhost:{port}" if host in ("0.0.0.0", "::") else server_url
+    browser_url = f"http://localhost:{port}" if host in ("0.0.0.0", "::") else server_url  # noqa: S104
 
     print("=" * 70)
     print("  🚀 The Extractor — Self-Hosted Media Studio")
@@ -92,7 +92,7 @@ def main():
         if ret_res.get("deleted_records", 0) > 0:
             print(f"  📜 History Retention: Pruned {ret_res['deleted_records']} old record(s)")
     except Exception:
-        pass
+        pass  # noqa: S110
 
     # Check disk usage and run retention policy if configured
     try:
@@ -125,7 +125,7 @@ def main():
         elif ytdlp_status.get("checked"):
             print(f"  ✅ yt-dlp:  Up to date ({ytdlp_status['installed']})")
     except Exception:
-        pass
+        pass  # noqa: S110
 
     print("=" * 70)
 

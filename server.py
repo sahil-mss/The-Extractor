@@ -398,13 +398,13 @@ def open_system_folder(folder_path: str):
     resolved_path = os.path.normpath(folder_path)
     if system == "Windows":
         explorer_exe = shutil.which("explorer") or "explorer"
-        subprocess.Popen([explorer_exe, resolved_path])
+        subprocess.Popen([explorer_exe, resolved_path])  # noqa: S603
     elif system == "Darwin":
         open_exe = shutil.which("open") or "open"
-        subprocess.Popen([open_exe, resolved_path])
+        subprocess.Popen([open_exe, resolved_path])  # noqa: S603
     else:
         xdg_exe = shutil.which("xdg-open") or "xdg-open"
-        subprocess.Popen([xdg_exe, resolved_path])
+        subprocess.Popen([xdg_exe, resolved_path])  # noqa: S603
 
 @app.get("/healthz")
 def healthz():
@@ -1046,7 +1046,7 @@ def api_browse_folder(request: Request, authorized: bool = Depends(verify_api_ke
 
         selected_dir = ""
         try:
-            res = subprocess.run(
+            res = subprocess.run(  # noqa: S603
                 [sys.executable, "-c", script, default_dir],
                 capture_output=True,
                 text=True,
@@ -1103,7 +1103,7 @@ def api_open_audacity(req: AudacityRequest, authorized: bool = Depends(verify_ap
         args = [audacity_path]
         if target_file and os.path.exists(target_file):
             args.append(target_file)
-        subprocess.Popen(args)
+        subprocess.Popen(args)  # noqa: S603
         return {"status": "success", "file": target_file}
     except Exception as e:
         logger.error(f"Launch Audacity error: {e}", exc_info=True)

@@ -46,5 +46,8 @@ line-length = 120
 target-version = "py311"
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "UP", "B", "SIM", "C4"]
-ignore = ["E501"]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "C4", "S"]
+ignore = ["E501", "S110", "S112"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "S104", "S105", "S106"]
