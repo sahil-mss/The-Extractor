@@ -515,4 +515,32 @@ def test_api_comments_error_handling_and_no_duplication(monkeypatch):
     assert data["comments"][0]["author"] == "Alice"
 
 
+def test_frontend_accessibility_labels_and_attributes():
+    with open("web/index.html", encoding="utf-8") as f:
+        html = f.read()
+
+    # Check input accessibility labels
+    assert 'id="ytUrlInput"' in html and 'aria-label="YouTube Video or Playlist URL"' in html
+    assert 'id="rangeStart"' in html and 'aria-label="Snippet Start Percentage"' in html
+    assert 'id="rangeEnd"' in html and 'aria-label="Snippet End Percentage"' in html
+    assert 'id="transcriptSearchInput"' in html and 'aria-label="Search spoken words in transcript"' in html
+    assert 'id="descSearchInput"' in html and 'aria-label="Filter description words or links"' in html
+    assert 'id="commentSearchInput"' in html and 'aria-label="Search comments"' in html
+    assert 'id="historySearchInput"' in html and 'aria-label="Search history by title, URL, channel, or video ID"' in html
+
+    # Check aria-live attributes for dynamic indicators
+    assert 'id="progressCard"' in html and 'aria-live="polite"' in html
+    assert 'id="inspectLoader"' in html and 'aria-live="polite"' in html
+    assert 'id="errorBanner"' in html and 'aria-live="assertive"' in html
+    assert 'id="toast"' in html and 'aria-live="polite"' in html
+
+    # Check styles.css for focus-visible and prefers-reduced-motion
+    with open("web/styles.css", encoding="utf-8") as f:
+        css = f.read()
+
+    assert ":focus-visible" in css
+    assert "@media (prefers-reduced-motion: reduce)" in css
+
+
+
 

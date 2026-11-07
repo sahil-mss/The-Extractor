@@ -103,6 +103,7 @@
           type="url" 
           id="ytUrlInput" 
           placeholder="Paste YouTube Video or Shorts URL here..." 
+          aria-label="YouTube Video or Playlist URL"
           autocomplete="off" 
           spellcheck="false"
         >
@@ -154,13 +155,13 @@
     </section>
 
     <!-- Inspection Spinner / Loader -->
-    <div id="inspectLoader" class="loader-container hidden">
+    <div id="inspectLoader" class="loader-container hidden" aria-live="polite">
       <div class="spinner"></div>
       <p class="loader-text" id="loaderStatusText">Analyzing video metadata, tags, and transcript...</p>
     </div>
 
     <!-- Error Banner -->
-    <div id="errorBanner" class="alert-box alert-danger hidden">
+    <div id="errorBanner" class="alert-box alert-danger hidden" role="alert" aria-live="assertive">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <circle cx="12" cy="12" r="10"></circle>
         <line x1="12" y1="8" x2="12" y2="12"></line>
@@ -258,8 +259,8 @@
                   <div class="range-slider-wrap">
                     <div class="range-track-bg"></div>
                     <div id="rangeHighlight" class="range-track-highlight"></div>
-                    <input type="range" id="rangeStart" min="0" max="100" value="0" step="0.5" class="range-input">
-                    <input type="range" id="rangeEnd" min="0" max="100" value="100" step="0.5" class="range-input">
+                    <input type="range" id="rangeStart" min="0" max="100" value="0" step="0.5" class="range-input" aria-label="Snippet Start Percentage">
+                    <input type="range" id="rangeEnd" min="0" max="100" value="100" step="0.5" class="range-input" aria-label="Snippet End Percentage">
                   </div>
                 </div>
 
@@ -386,7 +387,7 @@
 
 
         <!-- Live Download Progress Monitor -->
-        <div id="progressCard" class="card progress-card hidden">
+        <div id="progressCard" class="card progress-card hidden" aria-live="polite">
           <div class="progress-header">
             <div class="status-indicator">
               <span class="spinner-sm"></span>
@@ -448,7 +449,7 @@
           <div id="paneTranscript" class="sidebar-pane">
             <div class="pane-action-bar">
               <div class="pane-search-wrap">
-                <input type="text" id="transcriptSearchInput" placeholder="Search spoken words..." class="pane-search-input">
+                <input type="text" id="transcriptSearchInput" placeholder="Search spoken words..." aria-label="Search spoken words in transcript" class="pane-search-input">
               </div>
               <button id="copyTranscriptBtn" class="btn btn-ghost btn-sm" title="Copy full transcript">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
@@ -465,7 +466,7 @@
           <div id="paneDescription" class="sidebar-pane hidden">
             <div class="pane-action-bar">
               <div class="pane-search-wrap">
-                <input type="text" id="descSearchInput" placeholder="Filter words or links..." class="pane-search-input">
+                <input type="text" id="descSearchInput" placeholder="Filter words or links..." aria-label="Filter description words or links" class="pane-search-input">
               </div>
               <span id="descSearchMatchCount" class="desc-match-badge hidden">0 matches</span>
               <button id="copyDescBtn" class="btn btn-ghost btn-sm" title="Copy clean description">
@@ -485,7 +486,7 @@
           <div id="paneComments" class="sidebar-pane hidden">
             <div class="pane-action-bar">
               <div class="pane-search-wrap">
-                <input type="text" id="commentSearchInput" placeholder="Search comments..." class="pane-search-input">
+                <input type="text" id="commentSearchInput" placeholder="Search comments..." aria-label="Search comments" class="pane-search-input">
               </div>
               <button id="refreshCommentsBtn" class="btn btn-ghost btn-sm" title="Refresh comments">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
@@ -532,6 +533,7 @@
             type="text" 
             id="historySearchInput" 
             placeholder="🔍 Search history by title, URL, channel, or video ID..." 
+            aria-label="Search history by title, URL, channel, or video ID"
             class="history-search-input"
           />
           <button id="clearSearchBtn" class="btn btn-ghost btn-sm hidden">Clear</button>
@@ -567,7 +569,7 @@
     </div>
 
     <!-- Toast Notification -->
-    <div id="toast" class="toast hidden">Copied to clipboard!</div>
+    <div id="toast" class="toast hidden" role="status" aria-live="polite">Copied to clipboard!</div>
   </div>
 
   <script src="app.js?v=2.8.0"></script>
