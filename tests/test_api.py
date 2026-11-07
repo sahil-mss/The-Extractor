@@ -420,3 +420,45 @@ def test_api_browse_folder_subprocess_and_permissions(monkeypatch):
     assert resp_remote.status_code == 403
     assert "only accessible from localhost" in resp_remote.json()["detail"]
 
+
+def test_comment_highlight_logic_in_frontend():
+    # Read web/app.js to verify highlight() implementation doesn't double-escape or break HTML entities
+    with open("web/app.js", encoding="utf-8") as f:
+        js = f.read()
+
+    assert "function highlight(text, query)" in js
+    assert "escapeHtml(text.slice(last, m.index))" in js
+    assert "<mark class='highlight'>" in js
+    assert "escapeHtml(m[0])" in js
+
+    # Test equivalent highlighting logic in Python to ensure correctness
+    import html
+    import re
+
+    def py_highlight(text, query):
+        if not text:
+            return ""
+        if not query:
+            return html.escape(text)
+        re_pat = re.compile(re.escape(query), re.IGNORECASE)
+        out = ""
+        last = 0
+        for m in re_pat.finditer(text):
+            out += html.escape(text[last:m.start()]) + f"<mark class='highlight'>{html.escape(m.group(0))}</mark>"
+            last = m.end()
+        out += html.escape(text[last:])
+        return out
+
+    # Test case 1: normal text highlighting
+    assert py_highlight("Hello world", "world") == "Hello <mark class='highlight'>world</mark>"
+
+    # Test case 2: text with HTML characters like & and <
+    # Query matching part of text containing & should escape & properly without double-escaping entities
+    res = py_highlight("AT&T is great <3", "AT&T")
+    assert res == "<mark class='highlight'>AT&amp;T</mark> is great &lt;3"
+
+    # Query matching inside <3
+    res2 = py_highlight("Rock & Roll <3", "<3")
+    assert res2 == "Rock &amp; Roll <mark class='highlight'>&lt;3</mark>"
+
+

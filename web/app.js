@@ -898,15 +898,28 @@ if (loadCommentsBtn) {
   loadCommentsBtn.addEventListener("click", () => fetchCommentsForVideo());
 }
 
+function highlight(text, query) {
+  if (!text) return "";
+  if (!query) return escapeHtml(text);
+  const re = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+  let out = "", last = 0, m;
+  while ((m = re.exec(text))) {
+    out += escapeHtml(text.slice(last, m.index)) + "<mark class='highlight'>" + escapeHtml(m[0]) + "</mark>";
+    last = m.index + m[0].length;
+    if (m[0].length === 0) re.lastIndex++;
+  }
+  return out + escapeHtml(text.slice(last));
+}
+
 function renderCommentsList() {
   commentsContainer.innerHTML = "";
-  const query = commentSearchInput ? commentSearchInput.value.trim().toLowerCase() : "";
+  const query = commentSearchInput ? commentSearchInput.value.trim() : "";
 
   const filtered = query
     ? currentComments.filter(
         (c) =>
-          c.text.toLowerCase().includes(query) ||
-          c.author.toLowerCase().includes(query)
+          c.text.toLowerCase().includes(query.toLowerCase()) ||
+          c.author.toLowerCase().includes(query.toLowerCase())
       )
     : currentComments;
 
@@ -914,15 +927,11 @@ function renderCommentsList() {
     filtered.forEach((c) => {
       const card = document.createElement("div");
       card.className = "comment-card";
-      let textHtml = escapeHtml(c.text);
-      if (query) {
-        const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi");
-        textHtml = textHtml.replace(regex, "<mark class='highlight'>$1</mark>");
-      }
+      const textHtml = highlight(c.text, query);
 
       card.innerHTML = `
         <div class="comment-head">
-          <span class="comment-author">@${escapeHtml(c.author)}</span>
+          <span class="comment-author">@${highlight(c.author, query)}</span>
           ${c.like_count ? `<span class="comment-likes">👍 ${c.like_count}</span>` : ""}
         </div>
         <div class="comment-text">${textHtml}</div>
