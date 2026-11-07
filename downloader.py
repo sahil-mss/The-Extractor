@@ -450,7 +450,7 @@ def sanitize_filename(name: str, max_len: int = 120) -> str:
     return cleaned[:max_len].rstrip()
 
 def get_base_ydl_opts(cookies_path: str | None = None) -> dict[str, Any]:
-    """Build standard yt-dlp options with optional cookies and FFmpeg detection."""
+    """Build high-speed, secure yt-dlp options with optional cookies and FFmpeg detection."""
     ffmpeg_path = find_ffmpeg_bin()
     opts: dict[str, Any] = {
         'quiet': True,
@@ -459,8 +459,11 @@ def get_base_ydl_opts(cookies_path: str | None = None) -> dict[str, Any]:
         'socket_timeout': 30,
         'retries': config.processing.max_retries,
         'fragment_retries': config.processing.max_retries,
-        'concurrent_fragment_downloads': 4,
-        'buffersize': 1024 * 64,  # 64 KB buffer for faster throughput
+        'concurrent_fragment_downloads': 16,  # 16-thread multi-part chunk downloads for maximum speed
+        'buffersize': 1024 * 512,  # 512 KB memory buffer for high-speed streaming
+        'http_chunk_size': 10485760,  # 10 MB chunk size for steady high-bandwidth throughput
+        'nocheckcertificate': False,  # Strict SSL security verification
+        'geo_bypass': True,  # Bypass geo-restrictions where possible
     }
     if ffmpeg_path:
         opts['ffmpeg_location'] = ffmpeg_path

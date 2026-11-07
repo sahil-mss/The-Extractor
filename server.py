@@ -62,6 +62,10 @@ async def add_security_headers(request: Request, call_next):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "no-referrer"
+    # Prevent caching of dynamic API responses to save cache memory
+    if request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
     return response
 
 # In-memory live task tracking protected by a reentrant lock
@@ -843,6 +847,27 @@ def api_clear_history(delete_files: bool = False, authorized: bool = Depends(ver
     return {"status": "success", "message": "History cleared"}
 
 # OS Integration Endpoints
+@app.post("/api/browse-folder")
+def api_browse_folder(authorized: bool = Depends(verify_api_key)):
+    """Opens a native OS folder picker dialog on the host PC and returns the selected directory."""
+    selected_dir = ""
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes("-topmost", True)
+        default_dir = config.absolute_download_dir
+        selected_dir = filedialog.askdirectory(
+            initialdir=default_dir if os.path.exists(default_dir) else None,
+            title="Select Download Directory"
+        )
+        root.destroy()
+    except Exception as e:
+        logger.warning(f"Native browse-folder dialog not available or failed: {e}")
+
+    return {"status": "success", "folder": selected_dir or ""}
+
 @app.post("/api/open-folder")
 def api_open_folder(authorized: bool = Depends(verify_api_key)):
     try:

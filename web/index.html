@@ -3,440 +3,575 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>The Extractor — Simple Media & Transcripts Studio</title>
+  <title>The Extractor — Video, Audio, Tags & Transcripts</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css?v=2.8.0">
   <link rel="icon" type="image/svg+xml" href="logo.svg">
 </head>
+
 <body>
-  <!-- Ambient Warm Atmosphere Accents (Strictly No Blue) -->
-  <div class="warm-glow glow-top"></div>
-  <div class="warm-glow glow-bottom"></div>
+  <div class="glow-orb orb-top-left"></div>
+  <div class="glow-orb orb-bottom-right"></div>
 
-  <div class="app-shell">
-    <!-- Top Friendly Bar -->
-    <header class="top-nav">
-      <div class="brand-group">
-        <div class="logo-box">
-          <img src="logo.svg" alt="The Extractor" class="app-logo">
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="header-top-row">
+        <div class="brand-badge">
+          <span class="pulse-dot"></span>
+          <span class="badge-text">v2.7.0 • Single & Batch Media Studio</span>
         </div>
-        <div>
-          <h1 class="brand-title">The <span class="coral-gradient">Extractor</span></h1>
-          <p class="brand-tagline">Download anything from YouTube. Easy as 1-2-3.</p>
+
+        <div class="header-actions">
+          <span id="diskBadge" class="brand-badge disk-indicator" title="Downloads storage usage and drive capacity">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
+              <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+              <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+              <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+            </svg>
+            <span id="diskUsageText">Checking disk...</span>
+          </span>
+          <button id="themeToggleBtn" class="btn btn-ghost btn-sm theme-toggle-btn" title="Toggle Light / Dark Mode">
+            <span class="theme-icon" id="themeIcon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="5"></circle>
+                <line x1="12" y1="1" x2="12" y2="3"></line>
+                <line x1="12" y1="21" x2="12" y2="23"></line>
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                <line x1="1" y1="12" x2="3" y2="12"></line>
+                <line x1="21" y1="12" x2="23" y2="12"></line>
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+              </svg>
+            </span>
+            <span class="theme-label" id="themeLabel">Light</span>
+          </button>
+          <button id="navHistoryBtn" class="btn btn-ghost btn-sm">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+            History (<span id="historyCountBadge">0</span>)
+          </button>
+          <button id="navSettingsBtn" class="btn btn-ghost btn-sm">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+            Settings
+          </button>
         </div>
       </div>
-
-      <div class="top-actions">
-        <span id="diskBadge" class="friendly-badge disk-pill" title="Hard drive space">
-          💾 <span id="diskUsageText">Checking drive...</span>
-        </span>
-        <button id="navHistoryBtn" class="pill-btn">
-          📜 History (<span id="historyCountBadge">0</span>)
-        </button>
-        <button id="navSettingsBtn" class="pill-btn">
-          ⚙️ Settings
-        </button>
+      <div id="ytdlpAlertBanner" class="ytdlp-alert hidden">
+        <span>⚠️ <strong>yt-dlp update available!</strong> Installed: <code id="ytdlpCurrentVer"></code> → Latest: <code id="ytdlpLatestVer"></code>. Run: <code>pip install --upgrade yt-dlp</code></span>
+        <button id="dismissYtdlpAlert" class="btn-icon">✖</button>
       </div>
+      <div id="jsAlertBanner" class="ytdlp-alert hidden">
+        <span>⚠️ <strong>No JavaScript runtime found!</strong> YouTube challenges require a JS runtime (Deno, Node.js, Bun, or QuickJS) and <code>yt-dlp-ejs</code>. Extractions may fail with "video not available".</span>
+        <button id="dismissJsAlert" class="btn-icon">✖</button>
+      </div>
+      <div id="ffmpegAlertBanner" class="ytdlp-alert hidden">
+        <span>⚠️ <strong>FFmpeg not found!</strong> Media merging, video format conversion, and audio extraction require FFmpeg. Please install FFmpeg on PATH.</span>
+        <button id="dismissFfmpegAlert" class="btn-icon">✖</button>
+      </div>
+      <div class="app-brand-title">
+        <img src="logo.svg" alt="The Extractor Logo" class="app-logo-img">
+        <h1 class="app-title">The <span class="gradient-text">Extractor</span></h1>
+      </div>
+      <p class="app-subtitle">Single & batch YouTube media downloader, metadata tag inspector, auto-comments explorer, and full timestamped transcript generator.</p>
     </header>
 
-    <!-- System Alerts -->
-    <div id="ytdlpAlertBanner" class="friendly-alert hidden">
-      <span>⚠️ <strong>yt-dlp update available!</strong> Installed: <code id="ytdlpCurrentVer"></code> → Latest: <code id="ytdlpLatestVer"></code>. Run: <code>pip install --upgrade yt-dlp</code></span>
-      <button id="dismissYtdlpAlert" class="icon-close-btn">✖</button>
-    </div>
-    <div id="jsAlertBanner" class="friendly-alert hidden">
-      <span>⚠️ <strong>No JavaScript runtime found!</strong> YouTube challenges require a JS runtime (Deno or Node.js).</span>
-      <button id="dismissJsAlert" class="icon-close-btn">✖</button>
-    </div>
-    <div id="ffmpegAlertBanner" class="friendly-alert hidden">
-      <span>⚠️ <strong>FFmpeg not found!</strong> Audio extraction and video merging require FFmpeg on your computer.</span>
-      <button id="dismissFfmpegAlert" class="icon-close-btn">✖</button>
+    <!-- Navigation Tabs (Single vs Batch) -->
+    <div class="tabs-bar">
+      <button class="tab-btn active" id="tabSingle">Single Video</button>
+      <button class="tab-btn" id="tabBatch">Batch & Playlists</button>
     </div>
 
-    <!-- Mode Selector Cards -->
-    <div class="mode-switcher">
-      <button class="mode-card active" id="tabSingle">
-        <span class="mode-icon">🎬</span>
-        <span class="mode-text">Single Video</span>
-      </button>
-      <button class="mode-card" id="tabBatch">
-        <span class="mode-icon">📚</span>
-        <span class="mode-text">Batch & Playlists</span>
-      </button>
-    </div>
-
-    <!-- Step 1: Input Box -->
-    <!-- Mode 1: Single URL -->
-    <section class="giant-input-card" id="singleInputCard">
-      <div class="step-label">
-        <span class="step-bubble">1</span>
-        <span>Paste your YouTube link below:</span>
-      </div>
-      <div class="input-bar">
-        <span class="input-emoji">🔗</span>
+    <!-- Mode 1: Single URL Card -->
+    <section class="card input-card" id="singleInputCard">
+      <div class="input-group">
+        <div class="input-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+          </svg>
+        </div>
         <input 
           type="url" 
           id="ytUrlInput" 
-          placeholder="Paste any YouTube video or Shorts link here..." 
+          placeholder="Paste YouTube Video or Shorts URL here..." 
           autocomplete="off" 
           spellcheck="false"
         >
-        <button id="pasteBtn" class="btn-paste" title="Paste from clipboard">📋 Paste</button>
-        <button id="inspectBtn" class="btn-primary-action">
-          <span>Inspect Video</span>
-          <span class="arrow-symbol">➔</span>
+        <button id="pasteBtn" class="btn btn-ghost" title="Paste from Clipboard">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+          Paste
+        </button>
+        <button id="inspectBtn" class="btn btn-primary">
+          <span class="btn-text">Inspect & Extract</span>
+          <svg class="btn-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+            <polyline points="12 5 19 12 12 19"></polyline>
+          </svg>
         </button>
       </div>
 
-      <!-- Quick Helpful Shortcuts -->
-      <div class="quick-helpers">
-        <button id="openFolderBtn" class="helper-chip">📁 Open Downloads Folder</button>
-        <button id="openAudacityBtn" class="helper-chip">🎙️ Edit in Audacity</button>
-      </div>
-    </section>
-
-    <!-- Mode 2: Batch & Playlist Input -->
-    <section class="giant-input-card hidden" id="batchInputCard">
-      <div class="step-label">
-        <span class="step-bubble">1</span>
-        <span>Paste multiple links or a playlist link:</span>
-      </div>
-      <div class="batch-textarea-wrapper">
-        <textarea 
-          id="batchUrlsInput" 
-          class="batch-textarea" 
-          rows="4" 
-          placeholder="https://www.youtube.com/watch?v=...&#10;https://www.youtube.com/playlist?list=..."
-        ></textarea>
-        <button id="batchPasteBtn" class="btn-paste-floating">📋 Paste</button>
-      </div>
-      <div class="batch-action-row">
-        <div class="batch-folder-picker">
-          <label for="batchFolderInput">📁 Save inside folder:</label>
-          <input type="text" id="batchFolderInput" placeholder="downloads/ (or type custom folder name)">
-        </div>
-        <button id="startBatchBtn" class="btn-primary-action">
-          <span>🚀 Start Batch Download (<span id="batchCount">0</span> items)</span>
+      <!-- Quick Shortcuts Bar -->
+      <div class="quick-bar">
+        <button id="openFolderBtn" class="quick-link">
+          📁 Open Downloads Folder
         </button>
       </div>
     </section>
 
-    <!-- Big Friendly Loader -->
-    <div id="inspectLoader" class="friendly-loader hidden">
-      <div class="bouncing-dots">
-        <span></span><span></span><span></span>
+    <!-- Mode 2: Batch & Playlist Input Card (Hidden by default) -->
+    <section class="card input-card hidden" id="batchInputCard">
+      <div class="batch-header">
+        <label for="batchUrlsInput" class="batch-label">Paste Multiple URLs or YouTube Playlist Link (one per line or comma-separated):</label>
+        <button id="batchPasteBtn" class="btn btn-ghost btn-sm">📋 Paste</button>
       </div>
-      <p id="loaderStatusText" class="loader-heading">Looking up video details...</p>
-      <p class="loader-sub">Grabbing titles, audio streams, transcript words, and creator tags.</p>
-    </div>
+      <textarea 
+        id="batchUrlsInput" 
+        class="batch-textarea" 
+        rows="4" 
+        placeholder="https://www.youtube.com/watch?v=...&#10;https://www.youtube.com/playlist?list=...&#10;https://youtu.be/..."
+      ></textarea>
 
-    <!-- Error Alert Banner -->
-    <div id="errorBanner" class="friendly-error-card hidden">
-      <span class="error-emoji">⚠️</span>
-      <div class="error-content">
-        <strong>Oops! Something went wrong:</strong>
-        <p id="errorMessage">Error details</p>
-      </div>
-    </div>
-
-    <!-- Batch Queue Monitor -->
-    <section id="batchQueueSection" class="queue-monitor-card hidden">
-      <div class="queue-header">
-        <div class="queue-title-wrap">
-          <span class="badge-tag">Queue</span>
-          <h3>Batch Downloads in Progress (<span id="queueSummaryText">0</span>)</h3>
+      <div class="batch-controls-row">
+        <div class="format-summary">
+          <span>Configured: <strong id="batchFormatSummary">MP4 (Best) + MP3 (192k) + Docs</strong></span>
         </div>
-        <div class="queue-controls">
-          <button id="cancelAllBtn" class="btn-danger-ghost">Stop All</button>
-          <button id="clearQueueBtn" class="btn-ghost-sm">Clear Completed</button>
-        </div>
+        <button id="startBatchBtn" class="btn btn-primary">
+          🚀 Queue Batch Download (<span id="batchCount">0</span> items)
+        </button>
       </div>
-
-      <div class="queue-status-counter">
-        <span class="count-tag count-queued">Waiting: <strong id="cntQueued">0</strong></span>
-        <span class="count-tag count-running">Downloading: <strong id="cntRunning">0</strong></span>
-        <span class="count-tag count-done">Finished: <strong id="cntCompleted">0</strong></span>
-        <span class="count-tag count-err">Failed: <strong id="cntFailed">0</strong></span>
-      </div>
-      <div id="queueList" class="queue-items-container"></div>
     </section>
 
-    <!-- Step 2 & 3: Results Workspace (Single Video) -->
-    <main id="resultSection" class="workspace-grid hidden">
-      <!-- Left Column: Video Details & Download Options -->
-      <div class="workspace-main">
-        <article class="baby-card hero-preview-card">
-          <div class="preview-hero">
-            <div class="hero-thumb-box">
-              <img id="videoThumb" src="" alt="Thumbnail" class="hero-thumb-img">
-              <span id="videoDuration" class="hero-duration-tag">00:00</span>
+    <!-- Inspection Spinner / Loader -->
+    <div id="inspectLoader" class="loader-container hidden">
+      <div class="spinner"></div>
+      <p class="loader-text" id="loaderStatusText">Analyzing video metadata, tags, and transcript...</p>
+    </div>
+
+    <!-- Error Banner -->
+    <div id="errorBanner" class="alert-box alert-danger hidden">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"></circle>
+        <line x1="12" y1="8" x2="12" y2="12"></line>
+        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+      </svg>
+      <span id="errorMessage">Error text</span>
+    </div>
+
+    <!-- Batch Queue Monitor (Displays active and queued downloads) -->
+    <section id="batchQueueSection" class="card queue-card hidden">
+      <div class="section-header">
+        <div class="header-left">
+          <span class="section-badge badge-violet">Queue</span>
+          <h3 class="section-title">Batch Processing (<span id="queueSummaryText">0 items</span>)</h3>
+        </div>
+        <div class="header-actions">
+          <button id="cancelAllBtn" class="btn btn-ghost btn-sm" style="color: var(--accent-danger, #ef4444);">Cancel All</button>
+          <button id="clearQueueBtn" class="btn btn-ghost btn-sm">Clear Completed</button>
+        </div>
+      </div>
+      <div id="queueSummaryBar" class="queue-summary-bar" style="display: flex; gap: 12px; margin-bottom: 12px; font-size: 0.85rem; opacity: 0.9;">
+        <span>Queued: <strong id="cntQueued">0</strong></span>
+        <span>Downloading: <strong id="cntRunning">0</strong></span>
+        <span>Completed: <strong id="cntCompleted">0</strong></span>
+        <span>Failed: <strong id="cntFailed">0</strong></span>
+      </div>
+      <div id="queueList" class="queue-list">
+        <!-- Rendered dynamically -->
+      </div>
+    </section>
+
+
+    <!-- Results Workspace (Single Video) -->
+    <main id="resultSection" class="result-layout hidden">
+      <!-- Left Column: Video Preview & Download Options -->
+      <div class="result-main">
+        <article class="card media-hero-card">
+          <!-- Interactive Video Player & Thumbnail Container -->
+          <div class="video-container" id="videoContainer">
+            <div class="thumbnail-wrapper" id="thumbWrapper">
+              <img id="videoThumb" src="" alt="Video Thumbnail" class="thumbnail-img">
+              <span id="videoDuration" class="duration-badge">00:00</span>
+              <button id="playPreviewBtn" class="play-overlay-btn" title="Play Video Preview">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
+                  <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                </svg>
+                <span>Preview Video</span>
+              </button>
             </div>
-            <div class="hero-info">
-              <h2 id="videoTitle" class="hero-title">Video Title</h2>
-              <div class="hero-meta-line">
-                <span id="videoChannel" class="hero-channel">Channel Name</span>
-                <span>•</span>
-                <span id="videoViews">0 views</span>
-                <span>•</span>
-                <span id="videoDate">Upload Date</span>
-              </div>
+            <!-- Embedded HTML5/Iframe Preview Player -->
+            <div id="playerFrameWrapper" class="player-wrapper hidden">
+              <iframe id="videoPlayerFrame" src="" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+              <button id="closePlayerBtn" class="close-player-btn" title="Close Preview">✕</button>
             </div>
           </div>
 
-          <!-- Step 2: Custom Snippet & Time Trimming -->
-          <div class="snippet-trimmer-box">
-            <div class="section-title-row">
-              <span class="mini-step">Optional</span>
-              <h4>✂️ Snippet & Clip Range (Download only a part)</h4>
-              <button id="toggleSnippetBtn" class="chip-toggle">Enable Snippet Trimming</button>
+          <div class="media-details">
+            <h2 id="videoTitle" class="video-title">Video Title</h2>
+            <div class="meta-row">
+              <span id="videoChannel" class="meta-item meta-channel">Channel</span>
+              <span class="meta-bullet">•</span>
+              <span id="videoViews" class="meta-item">0 views</span>
+              <span class="meta-bullet">•</span>
+              <span id="videoDate" class="meta-item">Date</span>
             </div>
-            <div id="snippetControls" class="snippet-inputs-row hidden">
-              <div class="time-field">
-                <label for="snippetStart">Start Time (seconds or MM:SS):</label>
-                <input type="text" id="snippetStart" placeholder="0:00 (e.g. 15)">
+
+            <!-- Visual Video Trimming & Snippet Range Studio -->
+            <div class="trimmer-panel">
+              <div class="trimmer-header">
+                <div class="trimmer-title-group">
+                  <span class="pill-dot dot-amber"></span>
+                  <span class="trimmer-title">Visual Snippet & Trimmer</span>
+                </div>
+                <button id="toggleTrimmerBtn" class="btn btn-ghost btn-sm">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
+                    <circle cx="6" cy="6" r="3"></circle>
+                    <circle cx="6" cy="18" r="3"></circle>
+                    <line x1="20" y1="4" x2="8.12" y2="15.88"></line>
+                    <line x1="14.47" y1="14.48" x2="20" y2="20"></line>
+                    <line x1="8.12" y1="8.12" x2="12" y2="12"></line>
+                  </svg>
+                  Enable Trim Cut
+                </button>
               </div>
-              <div class="time-field">
-                <label for="snippetEnd">End Time (seconds or MM:SS):</label>
-                <input type="text" id="snippetEnd" placeholder="Full (e.g. 1:30)">
-              </div>
-              <button id="resetSnippetBtn" class="btn-ghost-sm">Reset to Full</button>
-            </div>
-          </div>
 
-          <!-- Destination Folder Picker -->
-          <div class="destination-folder-box">
-            <div class="section-title-row">
-              <span class="mini-step">Folder</span>
-              <h4>📁 Where should we save this?</h4>
-            </div>
-            <div class="folder-input-row">
-              <input type="text" id="customFolderInput" placeholder="downloads/ (type a folder name to organize your files)">
-            </div>
-          </div>
+              <div id="trimmerControls" class="trimmer-controls hidden">
+                <div class="timeline-cutter">
+                  <div class="cutter-labels">
+                    <span id="trimStartLabel" class="time-readout">Start: 0:00</span>
+                    <span id="trimDurationLabel" class="time-duration-chip">Clip: Full Video</span>
+                    <span id="trimEndLabel" class="time-readout">End: --:--</span>
+                  </div>
 
-          <!-- Quality Selectors -->
-          <div class="quality-selectors-row">
-            <div class="quality-field">
-              <label for="selResolution">📺 Video Quality</label>
-              <select id="selResolution" class="dropdown-control">
-                <option value="best">Best Available (HD / 4K)</option>
-                <option value="1080p">1080p Full HD</option>
-                <option value="720p">720p HD</option>
-                <option value="480p">480p Standard</option>
-              </select>
-            </div>
-            <div class="quality-field">
-              <label for="selAudio">🎧 Audio Quality</label>
-              <select id="selAudio" class="dropdown-control">
-                <option value="mp3-192">MP3 (192k - Standard Music)</option>
-                <option value="mp3-320">MP3 (320k - Best Studio Sound)</option>
-                <option value="mp3-128">MP3 (128k - Voice & Podcasts)</option>
-                <option value="wav-192">WAV (Lossless Studio PCM)</option>
-                <option value="m4a-192">M4A (Apple AAC)</option>
-              </select>
-            </div>
-          </div>
+                  <!-- Dual Visual Slider -->
+                  <div class="range-slider-wrap">
+                    <div class="range-track-bg"></div>
+                    <div id="rangeHighlight" class="range-track-highlight"></div>
+                    <input type="range" id="rangeStart" min="0" max="100" value="0" step="0.5" class="range-input">
+                    <input type="range" id="rangeEnd" min="0" max="100" value="100" step="0.5" class="range-input">
+                  </div>
+                </div>
 
-          <!-- Package Selection Options -->
-          <div class="selection-box">
-            <div class="selection-header-row">
-              <h4>📦 What would you like to save?</h4>
-              <div class="quick-select-helpers">
-                <button id="selectAllBtn" class="link-btn">Select All</button>
-                <span>•</span>
-                <button id="selectOnlyAudioBtn" class="link-btn">Music Only</button>
-                <span>•</span>
-                <button id="selectOnlyVideoBtn" class="link-btn">Video Only</button>
+                <div class="trim-inputs-row">
+                  <div class="time-input-wrap">
+                    <label for="snippetStart">Start Point:</label>
+                    <input type="text" id="snippetStart" placeholder="0:00 (or seconds)" class="trim-text-input">
+                  </div>
+                  <div class="time-input-wrap">
+                    <label for="snippetEnd">End Point:</label>
+                    <input type="text" id="snippetEnd" placeholder="Full (or seconds)" class="trim-text-input">
+                  </div>
+                  <button id="resetSnippetBtn" class="btn btn-ghost btn-sm" title="Reset to full range">Reset Full</button>
+                </div>
               </div>
             </div>
 
-            <div class="big-checkbox-grid">
-              <!-- Video Option -->
-              <label class="custom-check-card" for="optVideo">
-                <input type="checkbox" id="optVideo" checked>
-                <div class="check-ui">
-                  <span class="check-icon">🎬</span>
-                  <div class="check-text">
-                    <strong>Video File (MP4)</strong>
-                    <small>Watch offline anytime on any device</small>
-                  </div>
-                </div>
-              </label>
-
-              <!-- Audio Option -->
-              <label class="custom-check-card" for="optAudio">
-                <input type="checkbox" id="optAudio" checked>
-                <div class="check-ui">
-                  <span class="check-icon">🎵</span>
-                  <div class="check-text">
-                    <strong>Audio File (MP3 / WAV)</strong>
-                    <small>For music player or Audacity editing</small>
-                  </div>
-                </div>
-              </label>
-
-              <!-- Document Option -->
-              <label class="custom-check-card" for="optDoc">
-                <input type="checkbox" id="optDoc" checked>
-                <div class="check-ui">
-                  <span class="check-icon">📝</span>
-                  <div class="check-text">
-                    <strong>Readable Document (.md & .txt)</strong>
-                    <small>Spoken words, timestamps & tags</small>
-                  </div>
-                </div>
-              </label>
-
-              <!-- JSON Export Option -->
-              <label class="custom-check-card" for="optJson">
-                <input type="checkbox" id="optJson">
-                <div class="check-ui">
-                  <span class="check-icon">📊</span>
-                  <div class="check-text">
-                    <strong>Complete Data (JSON)</strong>
-                    <small>Export tags, comments & transcripts</small>
-                  </div>
-                </div>
-              </label>
+            <!-- Destination Folder Selection -->
+            <div class="folder-selection-row">
+              <label for="customFolderInput" class="folder-label">Save In Folder:</label>
+              <input type="text" id="customFolderInput" placeholder="Default downloads folder or custom path" class="folder-input">
+              <button type="button" id="browseFolderBtn" class="btn btn-ghost btn-sm browse-folder-btn" title="Browse PC for folder">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
+                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                </svg>
+                Browse...
+              </button>
             </div>
 
-            <!-- Big Start Download Button -->
-            <button id="downloadBtn" class="giant-download-button">
-              <span class="btn-download-icon">⬇️</span>
-              <span class="btn-download-title">Download Everything Selected</span>
-            </button>
+            <!-- Quality & Format Selectors -->
+            <div class="customization-bar">
+              <div class="selector-field">
+                <label for="selResolution">Video Quality:</label>
+                <select id="selResolution" class="select-dropdown">
+                  <option value="best">Best Available (HD/4K)</option>
+                  <option value="1080p">1080p Full HD</option>
+                  <option value="720p">720p HD</option>
+                  <option value="480p">480p SD</option>
+                </select>
+              </div>
+
+              <div class="selector-field">
+                <label for="selAudio">Audio Quality:</label>
+                <select id="selAudio" class="select-dropdown">
+                  <option value="mp3-192">MP3 (192 kbps - Standard)</option>
+                  <option value="mp3-320">MP3 (320 kbps - Studio)</option>
+                  <option value="mp3-128">MP3 (128 kbps - Voice)</option>
+                  <option value="wav-192">WAV (Lossless PCM)</option>
+                  <option value="m4a-192">M4A (AAC)</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Download Options Selection -->
+            <div class="download-selector-panel">
+              <div class="panel-header-row">
+                <h3 class="panel-subtitle">Package Selection</h3>
+                <div class="quick-preset-btns">
+                  <button id="selectAllBtn" class="preset-link">All</button>
+                  <span class="preset-sep">•</span>
+                  <button id="selectOnlyAudioBtn" class="preset-link">Music Only</button>
+                  <span class="preset-sep">•</span>
+                  <button id="selectOnlyVideoBtn" class="preset-link">Video Only</button>
+                </div>
+              </div>
+              <div class="options-grid">
+                <label class="option-pill" for="optVideo">
+                  <input type="checkbox" id="optVideo" checked>
+                  <div class="pill-body">
+                    <span class="pill-dot dot-violet"></span>
+                    <div class="pill-content">
+                      <span class="pill-title">Video (MP4)</span>
+                      <span class="pill-desc">Selected resolution merged</span>
+                    </div>
+                  </div>
+                </label>
+
+                <label class="option-pill" for="optAudio">
+                  <input type="checkbox" id="optAudio" checked>
+                  <div class="pill-body">
+                    <span class="pill-dot dot-emerald"></span>
+                    <div class="pill-content">
+                      <span class="pill-title">Audio File</span>
+                      <span class="pill-desc">High-fidelity MP3/WAV/M4A sound</span>
+                    </div>
+                  </div>
+                </label>
+
+                <label class="option-pill" for="optDoc">
+                  <input type="checkbox" id="optDoc" checked>
+                  <div class="pill-body">
+                    <span class="pill-dot dot-amber"></span>
+                    <div class="pill-content">
+                      <span class="pill-title">Metadata & Transcript</span>
+                      <span class="pill-desc">Markdown (.md) + Text (.txt)</span>
+                    </div>
+                  </div>
+                </label>
+
+                <label class="option-pill" for="optJson">
+                  <input type="checkbox" id="optJson">
+                  <div class="pill-body">
+                    <span class="pill-dot dot-violet"></span>
+                    <div class="pill-content">
+                      <span class="pill-title">JSON Data</span>
+                      <span class="pill-desc">Tags, comments & metadata bundle</span>
+                    </div>
+                  </div>
+                </label>
+              </div>
+
+              <!-- Start Download CTA -->
+              <button id="downloadBtn" class="btn btn-download">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="7 10 12 15 17 10"></polyline>
+                  <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                <span>Start Extraction & Download</span>
+              </button>
+            </div>
           </div>
         </article>
 
+
         <!-- Live Download Progress Monitor -->
-        <div id="progressCard" class="baby-card progress-box hidden">
-          <div class="progress-title-row">
-            <div class="progress-status-wrap">
-              <span class="spin-dot"></span>
-              <span id="progressPhaseText" class="progress-status-msg">Downloading...</span>
+        <div id="progressCard" class="card progress-card hidden">
+          <div class="progress-header">
+            <div class="status-indicator">
+              <span class="spinner-sm"></span>
+              <span id="progressPhaseText" class="progress-status">Downloading...</span>
             </div>
-            <span id="progressPercent" class="progress-pct-huge">0%</span>
+            <span id="progressPercent" class="progress-percentage">0%</span>
           </div>
 
-          <div class="huge-progress-bar-track">
-            <div id="progressBar" class="huge-progress-bar-fill" style="width: 0%"></div>
+          <div class="progress-track">
+            <div id="progressBar" class="progress-bar" style="width: 0%"></div>
           </div>
 
-          <div class="progress-sub-stats">
-            <span id="progressSpeed">Speed: --</span>
-            <span id="progressEta">Time Remaining: --</span>
+          <div class="progress-details">
+            <span id="progressSpeed" class="stat-item">Speed: --</span>
+            <span id="progressEta" class="stat-item">ETA: --</span>
           </div>
 
-          <!-- Finished Celebration Banner -->
-          <div id="finishedActions" class="celebration-box hidden">
-            <div class="celebration-message">
-              <span class="celebration-emoji">🎉</span>
-              <div>
-                <strong>Done! All files were saved safely.</strong>
-                <p>Everything is ready in your folder.</p>
-              </div>
+          <!-- Finished Actions Bar -->
+          <div id="finishedActions" class="finished-actions hidden">
+            <div class="success-banner">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                <polyline points="22 4 12 14.01 9 11.01"></polyline>
+              </svg>
+              <span>Files successfully saved to your downloads directory!</span>
             </div>
-            <div class="celebration-buttons">
-              <button id="openFolderActionBtn" class="btn-warm-action">📁 Open Folder</button>
-              <button id="openAudacityActionBtn" class="btn-warm-action">🎙️ Edit in Audacity</button>
+            <div class="action-buttons-row">
+              <button id="openFolderActionBtn" class="btn btn-secondary">
+                📁 Open in Explorer
+              </button>
             </div>
           </div>
-        </div>
-
-        <!-- Video Description Drawer -->
-        <div class="baby-card info-accordion">
-          <div class="accordion-head">
-            <h4>📖 Video Description</h4>
-            <button id="copyDescBtn" class="btn-ghost-sm">📋 Copy</button>
-          </div>
-          <pre id="videoDesc" class="accordion-text"></pre>
         </div>
       </div>
 
-      <!-- Right Column: Interactive Tabs for Tags, Transcripts & Comments Search -->
-      <aside class="workspace-sidebar">
-        <!-- Interactive Inspector Panel -->
-        <div class="baby-card inspector-card">
-          <div class="inspector-tabs-header">
-            <button class="inspect-tab active" id="inspectTabTranscript">📝 Transcripts</button>
-            <button class="inspect-tab" id="inspectTabComments">💬 Comments Search</button>
-            <button class="inspect-tab" id="inspectTabTags">🏷️ Tags</button>
+      <!-- Right Column: Interactive Inspector Tabs (Description, Transcript, Comments, Tags) -->
+      <aside class="result-sidebar">
+        <section class="card inspector-card">
+          <div class="sidebar-tabs">
+            <button class="sidebar-tab active" id="tabTranscript">
+              <span class="pill-dot dot-violet"></span>
+              <span>Transcript</span>
+            </button>
+            <button class="sidebar-tab" id="tabDescription">
+              <span class="pill-dot dot-emerald"></span>
+              <span>Description</span>
+            </button>
+            <button class="sidebar-tab" id="tabComments">
+              <span class="pill-dot dot-coral"></span>
+              <span>Comments</span>
+            </button>
+            <button class="sidebar-tab" id="tabTags">
+              <span class="pill-dot dot-amber"></span>
+              <span>Tags (<span id="tagsCountBadge">0</span>)</span>
+            </button>
           </div>
 
-          <!-- Pane 1: Transcript Search & View -->
-          <div class="inspect-pane" id="paneTranscript">
-            <div class="pane-search-bar">
-              <input type="text" id="transcriptSearchInput" placeholder="🔍 Search words inside video...">
-              <button id="copyTranscriptBtn" class="btn-ghost-sm">📋 Copy All</button>
+          <!-- Transcript Pane -->
+          <div id="paneTranscript" class="sidebar-pane">
+            <div class="pane-action-bar">
+              <div class="pane-search-wrap">
+                <input type="text" id="transcriptSearchInput" placeholder="Search spoken words..." class="pane-search-input">
+              </div>
+              <button id="copyTranscriptBtn" class="btn btn-ghost btn-sm" title="Copy full transcript">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+                Copy
+              </button>
             </div>
-            <div id="transcriptContainer" class="transcript-scroll-area"></div>
+            <div id="transcriptContainer" class="transcript-list custom-scroll"></div>
           </div>
 
-          <!-- Pane 2: Comments Search & View -->
-          <div class="inspect-pane hidden" id="paneComments">
-            <div class="pane-search-bar">
-              <input type="text" id="commentSearchInput" placeholder="🔍 Search in comments...">
-              <button id="loadCommentsBtn" class="btn-warm-sm">💬 Load Comments</button>
+          <!-- Description Pane -->
+          <div id="paneDescription" class="sidebar-pane hidden">
+            <div class="pane-action-bar">
+              <div class="pane-search-wrap">
+                <input type="text" id="descSearchInput" placeholder="Filter words or links..." class="pane-search-input">
+              </div>
+              <span id="descSearchMatchCount" class="desc-match-badge hidden">0 matches</span>
+              <button id="copyDescBtn" class="btn btn-ghost btn-sm" title="Copy clean description">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+                Copy
+              </button>
             </div>
-            <div id="commentsContainer" class="comments-scroll-area">
-              <div class="empty-placeholder">
-                <span class="placeholder-emoji">💬</span>
-                <p>Click <strong>Load Comments</strong> to fetch top discussions and search through what viewers said.</p>
+            <div id="videoDescWrapper" class="desc-body-wrapper expanded">
+              <div id="videoDesc" class="desc-body-content custom-scroll"></div>
+            </div>
+          </div>
+
+          <!-- Comments Pane -->
+          <div id="paneComments" class="sidebar-pane hidden">
+            <div class="pane-action-bar">
+              <div class="pane-search-wrap">
+                <input type="text" id="commentSearchInput" placeholder="Search comments..." class="pane-search-input">
+              </div>
+              <button id="refreshCommentsBtn" class="btn btn-ghost btn-sm" title="Refresh comments">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
+                  <polyline points="23 4 23 10 17 10"></polyline>
+                  <polyline points="1 20 1 14 7 14"></polyline>
+                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                </svg>
+                Refresh
+              </button>
+            </div>
+            <div id="commentsContainer" class="comments-list custom-scroll">
+              <div class="comments-empty-state">
+                <span class="empty-icon">💬</span>
+                <p>Top comments are loaded automatically.</p>
               </div>
             </div>
           </div>
 
-          <!-- Pane 3: Tags Cloud -->
-          <div class="inspect-pane hidden" id="paneTags">
-            <div class="pane-top-actions">
-              <span>Discovered (<strong id="tagsCount">0</strong>)</span>
-              <button id="copyTagsBtn" class="btn-ghost-sm">📋 Copy All</button>
+          <!-- Tags Pane -->
+          <div id="paneTags" class="sidebar-pane hidden">
+            <div class="pane-action-bar">
+              <span class="tags-status-text">Discovered Keywords (<strong id="tagsCount">0</strong>)</span>
+              <button id="copyTagsBtn" class="btn btn-ghost btn-sm" title="Copy all tags comma-separated">📋 Copy All</button>
             </div>
-            <div id="tagsContainer" class="tags-cloud-area"></div>
+            <div id="tagsContainer" class="tags-cloud custom-scroll"></div>
           </div>
-        </div>
+        </section>
       </aside>
     </main>
 
-    <!-- History Modal -->
-    <div id="historyModal" class="friendly-modal hidden">
-      <div class="friendly-modal-card">
-        <div class="modal-top">
-          <h2>📜 Your Download History</h2>
-          <div class="modal-actions-group">
-            <button id="clearHistoryBtn" class="btn-danger-sm">Clear All</button>
-            <button id="closeHistoryBtn" class="icon-close-btn">✖</button>
+
+    <!-- History Drawer / Modal -->
+    <div id="historyModal" class="modal-overlay hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2>📜 Persistent Job History</h2>
+          <div class="modal-header-actions">
+            <button id="clearHistoryBtn" class="btn btn-ghost btn-sm text-danger">Clear All</button>
+            <button id="closeHistoryBtn" class="btn-icon">✖</button>
           </div>
         </div>
-        <div class="modal-search-row">
-          <input type="text" id="historySearchInput" placeholder="🔍 Search past downloads by title, URL, or channel...">
-          <button id="clearSearchBtn" class="btn-ghost-sm hidden">Clear</button>
+        <div class="history-search-bar">
+          <input 
+            type="text" 
+            id="historySearchInput" 
+            placeholder="🔍 Search history by title, URL, channel, or video ID..." 
+            class="history-search-input"
+          />
+          <button id="clearSearchBtn" class="btn btn-ghost btn-sm hidden">Clear</button>
         </div>
-        <div class="modal-scroll-body" id="historyListContainer">
-          <p class="empty-state">No downloads yet. Paste a link to get started!</p>
+        <div class="modal-body" id="historyListContainer">
+          <p class="empty-state">No extraction history yet.</p>
         </div>
       </div>
     </div>
 
-    <!-- Settings Modal -->
-    <div id="settingsModal" class="friendly-modal hidden">
-      <div class="friendly-modal-card">
-        <div class="modal-top">
-          <h2>⚙️ System Settings & Status</h2>
-          <button id="closeSettingsBtn" class="icon-close-btn">✖</button>
+    <!-- Settings Drawer / Modal -->
+    <div id="settingsModal" class="modal-overlay hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="modal-title-wrap">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="modal-title-icon">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+            <h2>System Status & Configuration</h2>
+          </div>
+          <button id="closeSettingsBtn" class="btn-icon" aria-label="Close settings">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
         </div>
-        <div class="modal-scroll-body" id="settingsContent">
+        <div class="modal-body" id="settingsContent">
           <!-- Populated from /api/config -->
         </div>
       </div>
     </div>
 
-    <!-- Friendly Toast Notification -->
-    <div id="toast" class="toast-bubble hidden">Copied!</div>
+    <!-- Toast Notification -->
+    <div id="toast" class="toast hidden">Copied to clipboard!</div>
   </div>
 
-  <script src="app.js"></script>
+  <script src="app.js?v=2.8.0"></script>
 </body>
 </html>
+
+
