@@ -2,7 +2,27 @@
 
 All notable changes to **The Extractor** will be documented in this file.
 
-## [2.7.0] - 2026-10-12
+## [2.8.0] - 2026-11-07
+
+### Security & Hardening (P0)
+- **Auth Throttle Trusted Proxy Hardening**: Added `security.trusted_proxies` config setting. Requests now ignore `X-Forwarded-For` unless the peer is a trusted proxy, and inspect the rightmost untrusted IP address to prevent throttle spoofing and lockout attacks.
+- **Strict Output Directory Path Containment**: Added `paths.allowed_output_roots` and `paths.allow_any_output_dir` (restricted strictly to loopback). Custom paths are resolved via `os.path.realpath` and `Path.is_relative_to` to prevent arbitrary filesystem writes. Safe paths are registered in a new `known_output_dirs` SQLite table.
+- **Snippet Bounds Validation**: Enforced strict validation and sanitization for snippet start and end timestamps (`ge=0`, `le=86400`, `allow_inf_nan=False`), preventing crashes on missing end bounds or `NoneType` comparisons in `yt-dlp`.
+- **Folder Picker Isolation**: Restructured `/api/browse-folder` to execute in an isolated subprocess with a 120-second timeout and strictly restricted access to localhost/loopback.
+
+### Reliability & Performance (P1 & P2)
+- **Modern JavaScript Engine Runtime Validation**: Upgraded runtime checking to verify exact version compatibility (Deno >= 2.3.0, Node >= 22.0.0, Bun, QuickJS) and exposed runtime status in `/api/config`. Updated Docker container to install Deno 2.6.
+- **yt-dlp Extra Engine Pinning**: Updated auto-updater and upgrade notifications to target `yt-dlp[default]` so `yt-dlp-ejs` is never left stale.
+- **Single-Pass Metadata & Comment Extraction**: Consolidated comment fetching into initial video inspection, eliminated duplicate extraction passes, raised 502/504 status codes on comment errors/timeouts, and fixed HTML entity corruption during comment search highlighting.
+- **Configurable Chunk Fragment Concurrency**: Added `processing.fragment_threads` (default 4, range 1-16) to avoid triggering upstream YouTube HTTP rate limits.
+- **Storage Stats TTL Caching**: Added an in-memory 30-second TTL cache for directory storage calculations to prevent expensive disk traversals on `/api/config` calls.
+- **Log Rotation**: Replaced `FileHandler` with `RotatingFileHandler` (5MB limit, 3 backups) to protect disk storage.
+- **Launcher Resilience**: Enhanced `launcher.py` with `py -3` prioritization on Windows, extended dependency check timeout to 60s, and added platform troubleshooting advice for missing venv packages.
+
+### Accessibility & Tooling (P2 & P3)
+- **Web Accessibility**: Added comprehensive `aria-label` attributes across input controls, `aria-live` polite/assertive regions for spinners, progress monitors, toasts, and alert banners, plus high-contrast `:focus-visible` styles and `@media (prefers-reduced-motion: reduce)`.
+- **Code Quality & Linter Expansion**: Added `flake8-bugbear` (`B`), `flake8-simplify` (`SIM`), and `flake8-comprehensions` (`C4`) to Ruff configuration.
+
 
 ### Features & YouTube Compatibility (P0 & P1)
 - **JavaScript Runtime & EJS Engine Support (P0)**: Updated dependencies to `yt-dlp[default]>=2024.0.0` ensuring `yt-dlp-ejs` is installed; configured `js_runtimes` in `get_base_ydl_opts` to support Deno, Node.js, Bun, and QuickJS for solving YouTube JavaScript challenges; added Node.js to Docker image; implemented `js_runtime_available()` detection with startup banner alerts, `/api/config` reporting, and web UI alerts.

@@ -1,5 +1,5 @@
 // ==========================================================================
-// THE EXTRACTOR — V2.7.0 CLIENT SCRIPT (BATCH, HISTORY & FORMATS)
+// THE EXTRACTOR — V2.8.0 CLIENT SCRIPT (BATCH, HISTORY & FORMATS)
 // ==========================================================================
 
 
