@@ -5,6 +5,9 @@ All notable changes to **The Extractor** will be documented in this file.
 ## [2.8.1] - 2026-11-08
 
 ### Security & Hardening
+- **Indexed History Lookup Optimization**: Replaced O(n) history table scans in `is_known_media_file_in_history` with indexed multi-column SQL queries and added indices for `video_path`, `audio_path`, `doc_md_path`, `doc_txt_path`, and `json_path`. Seeded 50,000-row performance tests verify sub-50ms execution.
+- **Strict File Containment in Safe Download Paths**: Restored strict child check (`is_relative_to(root) and real_target != root`) in `is_safe_download_path` so download roots themselves are never treated as deletable media files.
+- **Removal of Silent-Exception Ignore Rules**: Removed `S110` and `S112` from Ruff ignore configuration, resolving each instance through narrowed exception handling or structured diagnostic logging (`logger.debug`/`logger.warning`).
 - **Independent Comments ThreadPoolExecutor**: Separated `/api/comments` execution into an independent `ThreadPoolExecutor(max_workers=2)` so heavy download queues cannot starve or delay comment retrieval.
 - **Direct Loopback Inspection**: Strengthened loopback-only endpoints to check actual peer IP against loopback addresses and verify that no client-supplied proxy headers (`X-Forwarded-For`, `Forwarded`, `X-Real-IP`) are present, preventing bypasses behind local reverse proxies.
 - **Directory Trust Lifetime & Revocation**: Added `source` tracking to `known_output_dirs` table; when `allow_any_output_dir` is toggled off, historical unconstrained folders are dynamically de-authorized. For `/api/open-audacity`, exact match against recorded history entries is enforced.
@@ -13,8 +16,11 @@ All notable changes to **The Extractor** will be documented in this file.
 - **Path Resolution Consistency**: Propagated canonical realpath output directory resolution to incoming request payloads prior to worker enqueue.
 - **Bandit Security Rule Enforcement**: Activated Ruff Bandit rules (`S`) with codebase annotations and per-file test exclusions.
 
-### Code Quality & Testing
-- **CLI & Launcher Test Suite**: Added dedicated regression test suites `tests/test_main.py` and `tests/test_launcher.py` covering argument parsing, hot reloading, browser dispatch, venv initialization, and fallback logic, elevating overall test suite to 115 passing tests.
+### Code Quality, Tooling & Testing
+- **Vulnerability Auditing in CI**: Added dedicated `pip-audit` security vulnerability scanning job to GitHub Actions CI workflow and updated pinned dependencies (`certifi>=2026.10.18`, `urllib3>=2.8.0`).
+- **Enforced Test Coverage Threshold**: Configured `--cov=. --cov-fail-under=85` in CI test steps; current test coverage sits above 86%.
+- **Pre-commit Hooks**: Added `.pre-commit-config.yaml` specifying Ruff lint and formatting hooks.
+- **CLI & Launcher Test Suite**: Added dedicated regression test suites `tests/test_main.py` and `tests/test_launcher.py` covering argument parsing, hot reloading, browser dispatch, venv initialization, and fallback logic, elevating overall test suite to 116 passing tests.
 
 ## [2.8.0] - 2026-11-07
 
