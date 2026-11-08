@@ -31,12 +31,14 @@ def get_default_config_path() -> str:
 
 CONFIG_FILE_PATH = get_default_config_path()
 
+
 class AppConfig(BaseModel):
     host: str = "127.0.0.1"
     port: int = 8000
     api_key: str = ""
     env: str = "development"
     cors_origins: list[str] = Field(default_factory=lambda: ["http://127.0.0.1:8000", "http://localhost:8000"])
+
 
 class SecurityConfig(BaseModel):
     require_api_key_for_non_localhost: bool = True
@@ -54,6 +56,7 @@ class PathsConfig(BaseModel):
     allowed_output_roots: list[str] = Field(default_factory=list)
     allow_any_output_dir: bool = False
 
+
 class DefaultsConfig(BaseModel):
     video_resolution: str = "best"
     audio_format: str = "mp3"
@@ -61,6 +64,7 @@ class DefaultsConfig(BaseModel):
     download_video: bool = True
     download_audio: bool = True
     download_doc: bool = True
+
 
 class ProcessingConfig(BaseModel):
     max_retries: int = 3
@@ -73,15 +77,18 @@ class ProcessingConfig(BaseModel):
     task_timeout_minutes: int = 60
     fragment_threads: int = Field(default=4, ge=1, le=16)
 
+
 class StorageConfig(BaseModel):
-    max_storage_gb: float = 0.0      # 0.0 means unlimited / no size-based deletion
-    delete_after_days: int = 0       # 0 means never delete by age
+    max_storage_gb: float = 0.0  # 0.0 means unlimited / no size-based deletion
+    delete_after_days: int = 0  # 0 means never delete by age
     warning_percent: float = 80.0
     critical_percent: float = 95.0
+
 
 class HistoryConfig(BaseModel):
     max_records: int = 10000
     retention_days: int = 90
+
 
 class Config(BaseModel):
     app: AppConfig = Field(default_factory=AppConfig)
@@ -91,7 +98,6 @@ class Config(BaseModel):
     processing: ProcessingConfig = Field(default_factory=ProcessingConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)
     history: HistoryConfig = Field(default_factory=HistoryConfig)
-
 
     @property
     def absolute_download_dir(self) -> str:
@@ -166,6 +172,7 @@ class Config(BaseModel):
 
         return None
 
+
 def load_config(config_path: str | None = None) -> Config:
     """Load configuration from YAML file or environment variables with graceful fallback."""
     path = config_path or CONFIG_FILE_PATH
@@ -201,6 +208,7 @@ def load_config(config_path: str | None = None) -> Config:
         data.setdefault("app", {})["host"] = os.environ["EXTRACTOR_HOST"]
     if "EXTRACTOR_PORT" in os.environ:
         import contextlib
+
         with contextlib.suppress(ValueError):
             data.setdefault("app", {})["port"] = int(os.environ["EXTRACTOR_PORT"])
     if "EXTRACTOR_ENV" in os.environ:
@@ -245,9 +253,7 @@ def validate_startup_security(cfg: Config) -> None:
                 "Security Error: Production mode (EXTRACTOR_ENV=production) requires an API key to be set."
             )
         if len(key) < min_len:
-            raise RuntimeError(
-                f"Security Error: Production mode requires an API key of at least {min_len} characters."
-            )
+            raise RuntimeError(f"Security Error: Production mode requires an API key of at least {min_len} characters.")
 
     # Non-localhost binding requirements
     if is_non_localhost(cfg.app.host) and cfg.security.require_api_key_for_non_localhost:
@@ -260,7 +266,6 @@ def validate_startup_security(cfg: Config) -> None:
             raise RuntimeError(
                 f"Security Error: Non-localhost binding in prod requires an API key of at least {min_len} chars."
             )
-
 
 
 def setup_logging(cfg: Config | None = None) -> logging.Logger:
@@ -279,18 +284,14 @@ def setup_logging(cfg: Config | None = None) -> logging.Logger:
     # Avoid duplicate handlers if setup_logging is called multiple times
     abs_log = os.path.abspath(log_path)
     has_handler = any(
-        isinstance(h, RotatingFileHandler) and getattr(h, "baseFilename", None) == abs_log
-        for h in app_logger.handlers
+        isinstance(h, RotatingFileHandler) and getattr(h, "baseFilename", None) == abs_log for h in app_logger.handlers
     )
     if not has_handler:
         formatter = logging.Formatter(
-            fmt="%(asctime)s [%(levelname)s] %(name)s (%(process)d): %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S"
+            fmt="%(asctime)s [%(levelname)s] %(name)s (%(process)d): %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
         )
         try:
-            file_handler = RotatingFileHandler(
-                log_path, maxBytes=5_000_000, backupCount=3, encoding="utf-8"
-            )
+            file_handler = RotatingFileHandler(log_path, maxBytes=5_000_000, backupCount=3, encoding="utf-8")
             file_handler.setLevel(logging.INFO)
             file_handler.setFormatter(formatter)
             app_logger.addHandler(file_handler)
@@ -309,5 +310,3 @@ def setup_logging(cfg: Config | None = None) -> logging.Logger:
 # Global singleton
 config = load_config()
 logger = setup_logging(config)
-
-

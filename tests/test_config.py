@@ -19,6 +19,7 @@ def test_extractor_home_path_resolution(monkeypatch, tmp_path):
     monkeypatch.setenv("EXTRACTOR_HOME", custom_home)
     # Reload config
     from config import load_config
+
     cfg = load_config("non_existent.yaml")
     assert cfg.absolute_download_dir == os.path.abspath(os.path.join(custom_home, "downloads"))
     assert cfg.absolute_data_dir == os.path.abspath(os.path.join(custom_home, "data"))
@@ -28,6 +29,7 @@ def test_extractor_home_path_resolution(monkeypatch, tmp_path):
 
 def test_setup_logging(tmp_path):
     from config import Config, setup_logging
+
     cfg = Config()
     custom_log = str(tmp_path / "test.log")
     cfg.paths.log_file = custom_log
@@ -40,11 +42,13 @@ def test_setup_logging(tmp_path):
         content = f.read()
     assert "Test log line" in content
 
+
 def test_audacity_resolver():
     cfg = Config()
     # Test that get_audacity_executable runs safely on any OS without throwing an exception
     path = cfg.get_audacity_executable()
     assert path is None or isinstance(path, str)
+
 
 def test_audacity_resolver_configured_path(monkeypatch, tmp_path):
     custom_bin = tmp_path / "my_audacity.exe"
@@ -53,10 +57,12 @@ def test_audacity_resolver_configured_path(monkeypatch, tmp_path):
     cfg.paths.audacity_path = str(custom_bin)
     assert cfg.get_audacity_executable() == str(custom_bin)
 
+
 def test_audacity_resolver_path_detection(monkeypatch):
     cfg = Config()
     monkeypatch.setattr("shutil.which", lambda name: "/mock/bin/audacity" if "audacity" in name.lower() else None)
     assert cfg.get_audacity_executable() == "/mock/bin/audacity"
+
 
 def test_audacity_resolver_platform_branches(monkeypatch):
     cfg = Config()
@@ -124,6 +130,7 @@ def test_fragment_threads_config(monkeypatch):
 
     # Test bounds
     from pydantic import ValidationError
+
     with pytest.raises(ValidationError):
         Config(processing={"fragment_threads": 0})
     with pytest.raises(ValidationError):
@@ -166,6 +173,3 @@ def test_launcher_helpers(monkeypatch):
     # 2. Non-windows or without py
     monkeypatch.setattr(shutil, "which", lambda cmd: None)
     assert launcher.get_base_python() == [sys.executable]
-
-
-

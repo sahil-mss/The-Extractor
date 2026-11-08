@@ -10,6 +10,7 @@ from server import app
 
 client = TestClient(app)
 
+
 @pytest.fixture(autouse=True)
 def reset_server_state():
     with server.TASKS_LOCK:
@@ -25,6 +26,7 @@ def reset_server_state():
     with server.AUTH_FAILURES_LOCK:
         server.AUTH_FAILURES.clear()
         server.AUTH_BLOCKED_UNTIL.clear()
+
 
 def test_startup_security_validation():
     # 1. Non-localhost (0.0.0.0 and LAN IP) without API key must raise RuntimeError
@@ -88,6 +90,7 @@ def test_batch_size_limit_rejection():
     assert response.status_code == 400
     assert "exceeds maximum limit" in response.json()["detail"]
 
+
 def test_batch_deduplication():
     # Submitting duplicate URLs in a batch must deduplicate them
     urls = [
@@ -102,6 +105,7 @@ def test_batch_deduplication():
     assert data["total"] == 2
     assert len(data["tasks"]) == 2
 
+
 def test_bulk_progress_endpoint():
     response = client.get("/api/progress")
     assert response.status_code == 200
@@ -112,6 +116,7 @@ def test_bulk_progress_endpoint():
     assert "queued" in data["summary"]
     assert "running" in data["summary"]
     assert isinstance(data["tasks"], list)
+
 
 def test_task_cancellation():
     # Enqueue a task
@@ -129,10 +134,12 @@ def test_task_cancellation():
     assert prog_res.status_code == 200
     assert prog_res.json()["status"] == "cancelled"
 
+
 def test_cancel_all_tasks():
     cancel_res = client.post("/api/tasks/cancel-all")
     assert cancel_res.status_code == 200
     assert "cancelled_count" in cancel_res.json()
+
 
 def test_safe_download_path_validation(tmp_path):
     # Valid download path inside download_dir
@@ -148,6 +155,7 @@ def test_safe_download_path_validation(tmp_path):
     assert database.is_safe_download_path("/etc/passwd") is False
     assert database.is_safe_download_path("C:\\Windows\\System32\\cmd.exe") is False
     assert database.is_safe_download_path("") is False
+
 
 def test_history_pagination_and_retention(tmp_path):
     orig_db = database.DB_PATH
@@ -184,6 +192,7 @@ def test_history_pagination_and_retention(tmp_path):
     finally:
         database.DB_PATH = orig_db
 
+
 def test_already_downloaded_detection(tmp_path):
     test_db = str(tmp_path / "test_already_dl.db")
     database.DB_PATH = test_db
@@ -202,6 +211,7 @@ def test_already_downloaded_detection(tmp_path):
 
     not_found = database.find_download_by_url("https://youtube.com/watch?v=never_downloaded")
     assert not_found is None
+
 
 def test_url_length_limit():
     huge_url = "https://www.youtube.com/watch?v=abc" + ("x" * 2500)
@@ -222,25 +232,29 @@ def test_download_endpoint_url_validation():
     assert "Only HTTP and HTTPS URLs are allowed" in res_file.json()["detail"]
 
 
-@pytest.mark.parametrize("bypass_url", [
-    "https://youtube.com:443@127.0.0.1/",
-    "http://youtube.com:80@127.0.0.1:8099/admin",
-    "https://www.youtube.com@evil.com/x",
-    "https://user:pw@www.youtube.com/watch?v=dQw4w9WgXcQ",
-    "https://www.youtube.com:8080/watch?v=dQw4w9WgXcQ",
-    "https://youtube.com.evil.com/x",
-    "https://[::1]/x",
-    "http://169.254.169.254/latest/meta-data/",
-    "https://youtu.be.evil.com/x",
-    "http://127.0.0.1/admin",
-    "http://10.0.0.1:8080/internal",
-    "http://192.168.1.1/setup",
-    "http://localhost:5000/api",
-    "https://evil.com/video",
-    "https://vimeo.com/123456",
-])
+@pytest.mark.parametrize(
+    "bypass_url",
+    [
+        "https://youtube.com:443@127.0.0.1/",
+        "http://youtube.com:80@127.0.0.1:8099/admin",
+        "https://www.youtube.com@evil.com/x",
+        "https://user:pw@www.youtube.com/watch?v=dQw4w9WgXcQ",
+        "https://www.youtube.com:8080/watch?v=dQw4w9WgXcQ",
+        "https://youtube.com.evil.com/x",
+        "https://[::1]/x",
+        "http://169.254.169.254/latest/meta-data/",
+        "https://youtu.be.evil.com/x",
+        "http://127.0.0.1/admin",
+        "http://10.0.0.1:8080/internal",
+        "http://192.168.1.1/setup",
+        "http://localhost:5000/api",
+        "https://evil.com/video",
+        "https://vimeo.com/123456",
+    ],
+)
 def test_url_validator_bypass_rejections(bypass_url):
     import downloader
+
     valid, err_msg = downloader.is_valid_youtube_url(bypass_url)
     assert valid is False
     assert err_msg != ""
@@ -252,13 +266,17 @@ def test_url_validator_bypass_rejections(bypass_url):
     assert res_dl.status_code == 400
 
 
-@pytest.mark.parametrize("valid_url", [
-    "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-    "https://youtu.be/dQw4w9WgXcQ",
-    "https://music.youtube.com/watch?v=dQw4w9WgXcQ",
-])
+@pytest.mark.parametrize(
+    "valid_url",
+    [
+        "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        "https://youtu.be/dQw4w9WgXcQ",
+        "https://music.youtube.com/watch?v=dQw4w9WgXcQ",
+    ],
+)
 def test_url_validator_accepts_valid_urls(valid_url):
     import downloader
+
     valid, err_msg = downloader.is_valid_youtube_url(valid_url)
     assert valid is True
     assert err_msg == ""
@@ -275,10 +293,12 @@ def test_integration_bypass_url_listener_receives_nothing():
             requests_received.append(self.path)
             self.send_response(200)
             self.end_headers()
+
         def do_POST(self):
             requests_received.append(self.path)
             self.send_response(200)
             self.end_headers()
+
         def log_message(self, format, *args):
             pass
 
@@ -319,36 +339,46 @@ def test_batch_download_url_validation():
 
 def test_input_validation_allowlists_and_bounds():
     # 1. Invalid video resolution
-    res_res = client.post("/api/download", json={
-        "url": "https://www.youtube.com/watch?v=validres01",
-        "video_resolution": "4k_super_ultra",
-    })
+    res_res = client.post(
+        "/api/download",
+        json={
+            "url": "https://www.youtube.com/watch?v=validres01",
+            "video_resolution": "4k_super_ultra",
+        },
+    )
     assert res_res.status_code == 422
 
     # 2. Invalid audio format
-    res_fmt = client.post("/api/download", json={
-        "url": "https://www.youtube.com/watch?v=validfmt01",
-        "audio_format": "flac",
-    })
+    res_fmt = client.post(
+        "/api/download",
+        json={
+            "url": "https://www.youtube.com/watch?v=validfmt01",
+            "audio_format": "flac",
+        },
+    )
     assert res_fmt.status_code == 422
 
     # 3. Invalid audio bitrate
-    res_bit = client.post("/api/download", json={
-        "url": "https://www.youtube.com/watch?v=validbit01",
-        "audio_bitrate": "999",
-    })
+    res_bit = client.post(
+        "/api/download",
+        json={
+            "url": "https://www.youtube.com/watch?v=validbit01",
+            "audio_bitrate": "999",
+        },
+    )
     assert res_bit.status_code == 422
 
     # 4. All download options False must be rejected
-    res_none = client.post("/api/download", json={
-        "url": "https://www.youtube.com/watch?v=validnone1",
-        "download_video": False,
-        "download_audio": False,
-        "download_doc": False,
-    })
+    res_none = client.post(
+        "/api/download",
+        json={
+            "url": "https://www.youtube.com/watch?v=validnone1",
+            "download_video": False,
+            "download_audio": False,
+            "download_doc": False,
+        },
+    )
     assert res_none.status_code == 422
-
-
 
 
 def test_batch_download_atomic_queue_limit(monkeypatch):
@@ -411,10 +441,13 @@ def test_cancel_stops_running_download_and_cleans_partials(tmp_path, monkeypatch
     class MockYDL:
         def __init__(self, opts):
             self.opts = opts
+
         def __enter__(self):
             return self
+
         def __exit__(self, exc_type, exc_val, exc_tb):
             pass
+
         def download(self, urls):
             # Trigger progress hook which will trigger cancellation check
             hook = self.opts.get("progress_hooks", [None])[0]
@@ -624,7 +657,6 @@ def test_batch_download_atomic_rollback_on_db_failure(monkeypatch):
     assert len(rollback_called_with) == 3
 
 
-
 def test_batch_download_playlist_expansion_failure_skipped(monkeypatch):
     import downloader
     import server
@@ -759,11 +791,3 @@ def test_dockerfile_custom_uid_environment():
     assert "HOME=/tmp" in content
     assert "DENO_DIR=/tmp/.deno" in content
     assert "PIP_CACHE_DIR=/tmp/.pip-cache" in content
-
-
-
-
-
-
-
-

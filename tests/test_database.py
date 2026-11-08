@@ -24,12 +24,12 @@ def test_db_lifecycle(tmp_path):
         "duration_str": "05:20",
         "thumbnail": "https://img.youtube.com/vi/sample123/0.jpg",
         "tag_count": 5,
-        "has_transcript": True
+        "has_transcript": True,
     }
     dummy_results = {
         "video_file": "downloads/Sample [VIDEO].mp4",
         "audio_file": "downloads/Sample [AUDIO].mp3",
-        "doc_files": {"md": "downloads/Sample.md", "txt": "downloads/Sample.txt"}
+        "doc_files": {"md": "downloads/Sample.md", "txt": "downloads/Sample.txt"},
     }
     database.record_task_completed(task_id, "https://youtube.com/watch?v=sample123", dummy_info, dummy_results)
 
@@ -141,7 +141,7 @@ def test_known_output_dirs_trust_revocation(tmp_path, monkeypatch):
         "task-abc",
         "https://youtube.com/watch?v=sample123",
         {"id": "sample123", "title": "Sample"},
-        {"audio_file": str(sample_file)}
+        {"audio_file": str(sample_file)},
     )
     assert database.is_known_media_file_in_history(str(sample_file)) is True
 
@@ -194,7 +194,3 @@ def test_is_known_media_file_in_history_performance(tmp_path):
     t_miss = time.perf_counter() - t0
     assert miss_res is False
     assert t_miss < 0.05, f"Miss took too long: {t_miss:.4f}s >= 0.05s"
-
-
-
-

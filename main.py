@@ -43,16 +43,13 @@ def open_browser_delayed(url: str, delay: float = 1.2):
     with contextlib.suppress(Exception):
         webbrowser.open(url)
 
+
 def main():
     parser = argparse.ArgumentParser(
-        prog="extractor",
-        description="The Extractor — Self-hosted Media Studio, Batch Downloader & Transcript Suite"
+        prog="extractor", description="The Extractor — Self-hosted Media Studio, Batch Downloader & Transcript Suite"
     )
     parser.add_argument(
-        "--host",
-        type=str,
-        default=config.app.host,
-        help=f"Host address to bind (default: {config.app.host})"
+        "--host", type=str, default=config.app.host, help=f"Host address to bind (default: {config.app.host})"
     )
     parser.add_argument("--port", type=int, default=config.app.port, help=f"Port to bind (default: {config.app.port})")
     parser.add_argument("--no-browser", action="store_true", help="Do not automatically launch the web browser")
@@ -97,10 +94,11 @@ def main():
     # Check disk usage and run retention policy if configured
     try:
         from downloader import check_ytdlp_version, get_storage_stats, perform_storage_cleanup
+
         cleanup_res = perform_storage_cleanup()
         if cleanup_res.get("deleted_files", 0) > 0:
-            deleted_count = cleanup_res['deleted_files']
-            freed_mb = cleanup_res['freed_mb']
+            deleted_count = cleanup_res["deleted_files"]
+            freed_mb = cleanup_res["freed_mb"]
             print(f"  🧹 Retention: Cleaned {deleted_count} old file(s) ({freed_mb} MB freed)")
 
         stats = get_storage_stats()
@@ -111,6 +109,7 @@ def main():
 
         # Check external runtimes (FFmpeg and JS engine)
         from downloader import ffmpeg_available, js_runtime_available
+
         if not ffmpeg_available():
             print("  ⚠️  WARNING: FFmpeg was not found. Audio extraction and format conversions may fail!")
         if not js_runtime_available():
@@ -119,16 +118,17 @@ def main():
         # Check yt-dlp staleness
         ytdlp_status = check_ytdlp_version()
         if ytdlp_status.get("is_outdated"):
-            inst_v = ytdlp_status['installed']
-            latest_v = ytdlp_status['latest']
-            print(f"  ⚠️  NOTICE: yt-dlp is outdated ({inst_v} -> {latest_v}). Run: pip install --upgrade \"yt-dlp[default]\"")
+            inst_v = ytdlp_status["installed"]
+            latest_v = ytdlp_status["latest"]
+            print(
+                f'  ⚠️  NOTICE: yt-dlp is outdated ({inst_v} -> {latest_v}). Run: pip install --upgrade "yt-dlp[default]"'
+            )
         elif ytdlp_status.get("checked"):
             print(f"  ✅ yt-dlp:  Up to date ({ytdlp_status['installed']})")
     except Exception as e:
         print(f"  ⚠️ Warning: Startup checks failed: {e}", file=sys.stderr)
 
     print("=" * 70)
-
 
     if not args.no_browser:
         t = threading.Thread(target=open_browser_delayed, args=(browser_url,), daemon=True)
@@ -142,6 +142,7 @@ def main():
         reload=args.reload,
         log_level="info",
     )
+
 
 if __name__ == "__main__":
     main()

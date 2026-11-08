@@ -24,6 +24,7 @@ def test_extract_video_id():
     assert extract_video_id("https://www.youtube.com/shorts/dQw4w9WgXcQ") == "dQw4w9WgXcQ"
     assert extract_video_id("https://www.youtube.com/embed/dQw4w9WgXcQ") == "dQw4w9WgXcQ"
 
+
 def test_is_playlist_url():
     assert is_playlist_url("https://www.youtube.com/playlist?list=PL123456789") is True
     assert is_playlist_url("https://www.youtube.com/watch?v=dQw4w9WgXcQ") is False
@@ -34,10 +35,12 @@ def test_is_playlist_url():
     # Video in playlist with index navigation
     assert is_playlist_url("https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PL123&index=1") is True
 
+
 def test_format_timestamp():
     assert format_timestamp(65) == "01:05"
     assert format_timestamp(3665) == "01:01:05"
     assert format_timestamp(0) == "00:00"
+
 
 def test_sanitize_filename():
     assert sanitize_filename('Invalid: / * ? " < > | Name') == "Invalid Name"
@@ -45,10 +48,12 @@ def test_sanitize_filename():
     assert len(sanitize_filename(long_name)) == 120
     assert len(sanitize_filename(long_name, max_len=50)) == 50
 
+
 def test_resolve_video_format_string():
     assert "1080" in resolve_video_format_string("1080p")
     assert "720" in resolve_video_format_string("720p")
     assert "bestvideo" in resolve_video_format_string("best")
+
 
 def test_download_media_bundle_end_to_end_mock(monkeypatch, tmp_path):
     from downloader import download_media_bundle
@@ -72,10 +77,13 @@ def test_download_media_bundle_end_to_end_mock(monkeypatch, tmp_path):
     class DummyYoutubeDL:
         def __init__(self, opts):
             self.opts = opts
+
         def __enter__(self):
             return self
+
         def __exit__(self, exc_type, exc_val, exc_tb):
             pass
+
         def download(self, urls):
             outtmpl = self.opts.get("outtmpl", "")
             # Simulate created file
@@ -100,6 +108,7 @@ def test_download_media_bundle_end_to_end_mock(monkeypatch, tmp_path):
     assert "abc12345678" in results["doc_files"]["md"]
     assert "finished" in progress_events
 
+
 def test_filename_collision_dedup(monkeypatch, tmp_path):
     """Test that two different videos with identical titles do not overwrite each other."""
     from downloader import download_media_bundle
@@ -107,10 +116,13 @@ def test_filename_collision_dedup(monkeypatch, tmp_path):
     class DummyYoutubeDL:
         def __init__(self, opts):
             self.opts = opts
+
         def __enter__(self):
             return self
+
         def __exit__(self, exc_type, exc_val, exc_tb):
             pass
+
         def download(self, urls):
             pass
 
@@ -132,6 +144,7 @@ def test_filename_collision_dedup(monkeypatch, tmp_path):
     assert res1["doc_files"]["md"] != res2["doc_files"]["md"]
     assert "VID_ONE_1111" in res1["video_file"]
     assert "VID_TWO_2222" in res2["video_file"]
+
 
 def test_storage_stats_and_cleanup(tmp_path):
     import time
@@ -162,6 +175,7 @@ def test_storage_stats_and_cleanup(tmp_path):
 
     # Also register f1 in database to verify path nulling
     import database
+
     database.init_db()
     database.record_task_completed(
         task_id="cleanup-test-task",
@@ -197,8 +211,10 @@ def test_storage_stats_and_cleanup(tmp_path):
     assert gitkeep.exists()
     assert part_file.exists()
 
+
 def test_check_ytdlp_version():
     from downloader import check_ytdlp_version
+
     info = check_ytdlp_version()
     assert "installed" in info
     assert isinstance(info["installed"], str)
@@ -219,6 +235,7 @@ def test_find_ffmpeg_bin_checks_beyond_path(monkeypatch):
 
 def test_version_compare_ignores_zero_padding():
     from downloader import _parse_ver
+
     assert _parse_ver("2026.8.19") == _parse_ver("2026.08.19")
 
 
@@ -398,9 +415,7 @@ def test_js_runtime_available(monkeypatch):
     # 1. Deno >= 2.3.0 is supported
     monkeypatch.setattr(shutil, "which", lambda cmd: "/usr/bin/deno" if cmd == "deno" else None)
     monkeypatch.setattr(
-        subprocess,
-        "run",
-        lambda *args, **kwargs: MagicMock(stdout="deno 2.6.0 (release, x86_64)", stderr="")
+        subprocess, "run", lambda *args, **kwargs: MagicMock(stdout="deno 2.6.0 (release, x86_64)", stderr="")
     )
     res = get_detected_js_runtime()
     assert res["available"] is True
@@ -410,11 +425,7 @@ def test_js_runtime_available(monkeypatch):
 
     # 2. Node < 22.0.0 (e.g. Node 18) is rejected
     monkeypatch.setattr(shutil, "which", lambda cmd: "/usr/bin/node" if cmd == "node" else None)
-    monkeypatch.setattr(
-        subprocess,
-        "run",
-        lambda *args, **kwargs: MagicMock(stdout="v18.19.0\n", stderr="")
-    )
+    monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: MagicMock(stdout="v18.19.0\n", stderr=""))
     res = get_detected_js_runtime()
     assert res["available"] is False
     assert res["supported"] is False
@@ -423,11 +434,7 @@ def test_js_runtime_available(monkeypatch):
     assert js_runtime_available() is False
 
     # 3. Node >= 22.0.0 is accepted
-    monkeypatch.setattr(
-        subprocess,
-        "run",
-        lambda *args, **kwargs: MagicMock(stdout="v22.4.1\n", stderr="")
-    )
+    monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: MagicMock(stdout="v22.4.1\n", stderr=""))
     assert js_runtime_available() is True
 
     # 4. None present
@@ -500,7 +507,3 @@ def test_storage_stats_caching(tmp_path, monkeypatch):
     stats3 = downloader.get_storage_stats(test_dir)
     assert stats3["file_count"] == 1
     assert scanned_count > initial_scans
-
-
-
-

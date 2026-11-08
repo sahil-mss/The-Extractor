@@ -99,17 +99,19 @@ def is_valid_youtube_url(url: str) -> tuple[bool, str]:
 
 class DownloadCancelled(Exception):
     """Raised when a download task has been cancelled by the user."""
-    pass
 
+    pass
 
 
 class PermanentMediaError(RuntimeError):
     """Raised when media is permanently unavailable, private, or age-restricted (non-retryable)."""
+
     pass
 
 
 class CommentsUnavailable(Exception):
     """Raised when comments cannot be extracted (disabled, video private, or upstream extraction error)."""
+
     pass
 
 
@@ -129,7 +131,6 @@ def is_permanent_error(err: Exception | str) -> bool:
         "removed by the uploader",
     ]
     return any(p in msg for p in permanent_patterns)
-
 
 
 def clean_leftover_partial_files(target_dir: str, vid_id: str) -> None:
@@ -155,6 +156,7 @@ def get_detected_js_runtime() -> dict[str, Any]:
     # 1. Prefer yt-dlp's internal runtime validation if available
     try:
         import yt_dlp
+
         ydl = yt_dlp.YoutubeDL()
         runtimes = getattr(ydl, "_js_runtimes", {})
         for name, rt in runtimes.items():
@@ -262,6 +264,7 @@ def find_ffmpeg_bin() -> str | None:
 
     return None
 
+
 def _parse_ver(v: str) -> tuple[int, ...]:
     parts = []
     for p in v.split("."):
@@ -269,6 +272,7 @@ def _parse_ver(v: str) -> tuple[int, ...]:
         if m:
             parts.append(int(m.group()))
     return tuple(parts)
+
 
 _YTDLP_VERSION_CACHE: dict[str, Any] | None = None
 _YTDLP_VERSION_CACHE_TIME: float = 0.0
@@ -303,8 +307,7 @@ def check_ytdlp_version(force_refresh: bool = False) -> dict[str, Any]:
 
         try:
             req = urllib.request.Request(
-                "https://pypi.org/pypi/yt-dlp/json",
-                headers={"User-Agent": "TheExtractor/2.8.0"}
+                "https://pypi.org/pypi/yt-dlp/json", headers={"User-Agent": "TheExtractor/2.8.0"}
             )
             with urllib.request.urlopen(req, timeout=3.0) as resp:  # noqa: S310
                 if resp.status == 200:
@@ -316,7 +319,7 @@ def check_ytdlp_version(force_refresh: bool = False) -> dict[str, Any]:
                         try:
                             result["is_outdated"] = _parse_ver(latest_ver) > _parse_ver(installed_ver)
                         except ValueError:
-                            result["is_outdated"] = (latest_ver != installed_ver)
+                            result["is_outdated"] = latest_ver != installed_ver
         except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError) as e:
             # Offline or PyPI unreachable: graceful fallback
             logger.debug(f"yt-dlp version check against PyPI failed: {e}")
@@ -379,8 +382,8 @@ def get_storage_stats(directory: str | None = None) -> dict[str, Any]:
     disk_used_percent = 0.0
     try:
         disk_usage = shutil.disk_usage(target_dir)
-        disk_free_gb = round(disk_usage.free / (1024 ** 3), 2)
-        disk_total_gb = round(disk_usage.total / (1024 ** 3), 2)
+        disk_free_gb = round(disk_usage.free / (1024**3), 2)
+        disk_total_gb = round(disk_usage.total / (1024**3), 2)
         if disk_usage.total > 0:
             disk_used_percent = round((disk_usage.used / disk_usage.total) * 100.0, 1)
     except Exception:
@@ -389,11 +392,12 @@ def get_storage_stats(directory: str | None = None) -> dict[str, Any]:
 
     result = {
         "directory": target_dir,
-        "is_default_download_dir": os.path.normcase(target_dir) == os.path.normcase(os.path.realpath(os.path.abspath(config.absolute_download_dir))),
+        "is_default_download_dir": os.path.normcase(target_dir)
+        == os.path.normcase(os.path.realpath(os.path.abspath(config.absolute_download_dir))),
         "file_count": file_count,
         "total_bytes": total_bytes,
-        "total_mb": round(total_bytes / (1024 ** 2), 2),
-        "total_gb": round(total_bytes / (1024 ** 3), 3),
+        "total_mb": round(total_bytes / (1024**2), 2),
+        "total_gb": round(total_bytes / (1024**3), 3),
         "disk_free_gb": disk_free_gb,
         "disk_total_gb": disk_total_gb,
         "disk_used_percent": disk_used_percent,
@@ -410,9 +414,7 @@ def get_storage_stats(directory: str | None = None) -> dict[str, Any]:
 
 
 def perform_storage_cleanup(
-    directory: str | None = None,
-    max_storage_gb: float | None = None,
-    delete_after_days: int | None = None
+    directory: str | None = None, max_storage_gb: float | None = None, delete_after_days: int | None = None
 ) -> dict[str, Any]:
     """
     Prunes files based on age (delete_after_days) or capacity cap (max_storage_gb).
@@ -486,7 +488,7 @@ def perform_storage_cleanup(
 
     # 2. Clean by size cap if configured
     if max_gb and max_gb > 0:
-        max_bytes = max_gb * (1024 ** 3)
+        max_bytes = max_gb * (1024**3)
         for entry in file_entries:
             if total_bytes <= max_bytes:
                 break
@@ -502,6 +504,7 @@ def perform_storage_cleanup(
     if deleted_paths:
         try:
             import database
+
             database.null_deleted_file_paths(deleted_paths)
         except Exception as e:
             logger.warning(f"Could not null deleted file paths in database: {e}")
@@ -510,7 +513,7 @@ def perform_storage_cleanup(
     return {
         "deleted_files": deleted_count,
         "freed_bytes": freed_bytes,
-        "freed_mb": round(freed_bytes / (1024 ** 2), 2),
+        "freed_mb": round(freed_bytes / (1024**2), 2),
         "remaining_bytes": total_bytes,
     }
 
@@ -518,16 +521,17 @@ def perform_storage_cleanup(
 def extract_video_id(url: str) -> str | None:
     """Extract 11-character YouTube video ID from various URL structures."""
     patterns = [
-        r'(?:v=|\/)([0-9A-Za-z_-]{11}).*',
-        r'(?:youtu\.be\/)([0-9A-Za-z_-]{11})',
-        r'(?:embed\/)([0-9A-Za-z_-]{11})',
-        r'(?:shorts\/)([0-9A-Za-z_-]{11})',
+        r"(?:v=|\/)([0-9A-Za-z_-]{11}).*",
+        r"(?:youtu\.be\/)([0-9A-Za-z_-]{11})",
+        r"(?:embed\/)([0-9A-Za-z_-]{11})",
+        r"(?:shorts\/)([0-9A-Za-z_-]{11})",
     ]
     for pattern in patterns:
         match = re.search(pattern, url)
         if match:
             return match.group(1)
     return None
+
 
 def is_playlist_url(url: str) -> bool:
     """Determine if a URL references a YouTube playlist."""
@@ -551,6 +555,7 @@ def is_playlist_url(url: str) -> bool:
     except Exception:
         return False
 
+
 def format_timestamp(seconds: float) -> str:
     """Format seconds into HH:MM:SS or MM:SS."""
     hrs = int(seconds // 3600)
@@ -560,45 +565,48 @@ def format_timestamp(seconds: float) -> str:
         return f"{hrs:02d}:{mins:02d}:{secs:02d}"
     return f"{mins:02d}:{secs:02d}"
 
+
 def sanitize_filename(name: str, max_len: int = 120) -> str:
     """Clean filename of characters forbidden in Windows and Unix, normalize spaces, and cap length."""
     cleaned = re.sub(r'[\\/*?:"<>|]', "", name)
-    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
     return cleaned[:max_len].rstrip()
+
 
 def get_base_ydl_opts(cookies_path: str | None = None) -> dict[str, Any]:
     """Build high-speed, secure yt-dlp options with optional cookies and FFmpeg detection."""
     ffmpeg_path = find_ffmpeg_bin()
     opts: dict[str, Any] = {
-        'quiet': True,
-        'no_warnings': True,
-        'allowed_extractors': ['youtube.*'],
-        'socket_timeout': 30,
-        'retries': config.processing.max_retries,
-        'fragment_retries': config.processing.max_retries,
-        'concurrent_fragment_downloads': getattr(config.processing, "fragment_threads", 4),
-        'buffersize': 1024 * 512,  # 512 KB memory buffer for high-speed streaming
-        'http_chunk_size': 10485760,  # 10 MB chunk size for steady high-bandwidth throughput
-        'nocheckcertificate': False,  # Strict SSL security verification
-        'geo_bypass': True,  # Bypass geo-restrictions where possible
+        "quiet": True,
+        "no_warnings": True,
+        "allowed_extractors": ["youtube.*"],
+        "socket_timeout": 30,
+        "retries": config.processing.max_retries,
+        "fragment_retries": config.processing.max_retries,
+        "concurrent_fragment_downloads": getattr(config.processing, "fragment_threads", 4),
+        "buffersize": 1024 * 512,  # 512 KB memory buffer for high-speed streaming
+        "http_chunk_size": 10485760,  # 10 MB chunk size for steady high-bandwidth throughput
+        "nocheckcertificate": False,  # Strict SSL security verification
+        "geo_bypass": True,  # Bypass geo-restrictions where possible
     }
     if ffmpeg_path:
-        opts['ffmpeg_location'] = ffmpeg_path
+        opts["ffmpeg_location"] = ffmpeg_path
 
     # JS Runtimes for YouTube challenges (Deno default, Node fallback, Bun, QuickJS)
-    opts['js_runtimes'] = {
-        'deno': {},
-        'node': {},
-        'bun': {},
-        'quickjs': {},
+    opts["js_runtimes"] = {
+        "deno": {},
+        "node": {},
+        "bun": {},
+        "quickjs": {},
     }
 
     # Cookies check
     cookie_file = cookies_path or config.paths.cookies_file
     if cookie_file and os.path.exists(cookie_file):
-        opts['cookiefile'] = cookie_file
+        opts["cookiefile"] = cookie_file
 
     return opts
+
 
 def expand_playlist_urls(playlist_url: str, max_items: int | None = None) -> list[dict[str, str]]:
     """
@@ -612,25 +620,27 @@ def expand_playlist_urls(playlist_url: str, max_items: int | None = None) -> lis
 
     limit = max_items if max_items is not None else config.processing.max_playlist_items
     opts = get_base_ydl_opts()
-    opts['extract_flat'] = True
-    opts['skip_download'] = True
+    opts["extract_flat"] = True
+    opts["skip_download"] = True
     if limit and limit > 0:
-        opts['playlistend'] = limit
+        opts["playlistend"] = limit
 
     videos = []
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(playlist_url, download=False)
-        entries = info.get('entries', []) if info else []
+        entries = info.get("entries", []) if info else []
         for entry in entries:
             if not entry:
                 continue
-            vid_id = entry.get('id')
+            vid_id = entry.get("id")
             if vid_id:
-                videos.append({
-                    'id': vid_id,
-                    'url': f"https://www.youtube.com/watch?v={vid_id}",
-                    'title': entry.get('title', f"Video {vid_id}")
-                })
+                videos.append(
+                    {
+                        "id": vid_id,
+                        "url": f"https://www.youtube.com/watch?v={vid_id}",
+                        "title": entry.get("title", f"Video {vid_id}"),
+                    }
+                )
             if limit and len(videos) >= limit:
                 break
     return videos
@@ -650,7 +660,7 @@ def fetch_transcript_data(video_id: str, ydl_info: dict | None = None) -> list[d
             transcript_list = api.list(video_id)
             transcript = None
             try:
-                transcript = transcript_list.find_transcript(['en', 'en-US', 'en-GB'])
+                transcript = transcript_list.find_transcript(["en", "en-US", "en-GB"])
             except Exception:
                 for t in transcript_list:
                     transcript = t
@@ -660,20 +670,22 @@ def fetch_transcript_data(video_id: str, ydl_info: dict | None = None) -> list[d
                 fetched = transcript.fetch()
                 for item in fetched:
                     if isinstance(item, dict):
-                        text = item.get('text', '').strip()
-                        start = item.get('start', 0.0)
-                        dur = item.get('duration', 0.0)
+                        text = item.get("text", "").strip()
+                        start = item.get("start", 0.0)
+                        dur = item.get("duration", 0.0)
                     else:
-                        text = getattr(item, 'text', '').strip()
-                        start = getattr(item, 'start', 0.0)
-                        dur = getattr(item, 'duration', 0.0)
+                        text = getattr(item, "text", "").strip()
+                        start = getattr(item, "start", 0.0)
+                        dur = getattr(item, "duration", 0.0)
                     if text:
-                        transcript_items.append({
-                            'start': float(start),
-                            'duration': float(dur),
-                            'timestamp': format_timestamp(float(start)),
-                            'text': text
-                        })
+                        transcript_items.append(
+                            {
+                                "start": float(start),
+                                "duration": float(dur),
+                                "timestamp": format_timestamp(float(start)),
+                                "text": text,
+                            }
+                        )
         except Exception as e:
             # Non-fatal: transcript unavailable or network error
             logger.debug(f"Optional transcript fetch failed or unavailable: {e}")
@@ -687,15 +699,17 @@ def parse_cleaned_comments(raw_comments: list[dict[str, Any]], max_comments: int
     for c in (raw_comments or [])[:max_comments]:
         if not c:
             continue
-        cleaned.append({
-            'id': str(c.get('id', '')),
-            'author': c.get('author') or c.get('author_id') or 'Anonymous',
-            'author_thumbnail': c.get('author_thumbnail') or '',
-            'text': c.get('text', '').strip(),
-            'like_count': c.get('like_count', 0) or 0,
-            'timestamp': c.get('timestamp') or 0,
-            'is_favorited': bool(c.get('is_favorited')),
-        })
+        cleaned.append(
+            {
+                "id": str(c.get("id", "")),
+                "author": c.get("author") or c.get("author_id") or "Anonymous",
+                "author_thumbnail": c.get("author_thumbnail") or "",
+                "text": c.get("text", "").strip(),
+                "like_count": c.get("like_count", 0) or 0,
+                "timestamp": c.get("timestamp") or 0,
+                "is_favorited": bool(c.get("is_favorited")),
+            }
+        )
     return cleaned
 
 
@@ -715,12 +729,14 @@ def fetch_comments_data(
         raise ValueError(err)
 
     opts = get_base_ydl_opts(cookies_path)
-    opts.update({
-        'skip_download': True,
-        'extract_flat': False,
-        'getcomments': True,
-        'extractor_args': {'youtube': {'max_comments': [str(max_comments)]}},
-    })
+    opts.update(
+        {
+            "skip_download": True,
+            "extract_flat": False,
+            "getcomments": True,
+            "extractor_args": {"youtube": {"max_comments": [str(max_comments)]}},
+        }
+    )
 
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
@@ -729,12 +745,13 @@ def fetch_comments_data(
             info = ydl.extract_info(url, download=False)
             if not info:
                 raise CommentsUnavailable("Failed to extract video information for comments.")
-            raw_comments = info.get('comments', [])
+            raw_comments = info.get("comments", [])
             return parse_cleaned_comments(raw_comments, max_comments=max_comments)
     except DownloadCancelled:
         raise
     except Exception as e:
         raise CommentsUnavailable(f"Comments unavailable: {e}") from e
+
 
 def inspect_video(
     url: str,
@@ -752,11 +769,11 @@ def inspect_video(
 
     video_id = extract_video_id(url)
     opts = get_base_ydl_opts(cookies_path)
-    opts['skip_download'] = True
-    opts['extract_flat'] = False
+    opts["skip_download"] = True
+    opts["extract_flat"] = False
     if fetch_comments:
-        opts['getcomments'] = True
-        opts['extractor_args'] = {'youtube': {'max_comments': ['50']}}
+        opts["getcomments"] = True
+        opts["extractor_args"] = {"youtube": {"max_comments": ["50"]}}
 
     last_err = None
     for attempt in range(config.processing.max_retries):
@@ -781,61 +798,62 @@ def inspect_video(
     else:
         raise RuntimeError(f"Failed to inspect video after {config.processing.max_retries} attempts: {last_err}")
 
-    vid_id = info.get('id') or video_id or "video"
-    title = info.get('title', 'Unknown Title')
-    description = info.get('description', '')
-    tags = info.get('tags', []) or []
-    uploader = info.get('uploader') or info.get('channel') or "Unknown Channel"
-    channel_url = info.get('channel_url') or f"https://www.youtube.com/@{uploader}"
-    duration = info.get('duration', 0)
-    duration_str = info.get('duration_string') or format_timestamp(duration or 0)
-    view_count = info.get('view_count', 0)
-    thumbnail = info.get('thumbnail') or f"https://i.ytimg.com/vi/{vid_id}/hqdefault.jpg"
-    upload_date = info.get('upload_date', '')
+    vid_id = info.get("id") or video_id or "video"
+    title = info.get("title", "Unknown Title")
+    description = info.get("description", "")
+    tags = info.get("tags", []) or []
+    uploader = info.get("uploader") or info.get("channel") or "Unknown Channel"
+    channel_url = info.get("channel_url") or f"https://www.youtube.com/@{uploader}"
+    duration = info.get("duration", 0)
+    duration_str = info.get("duration_string") or format_timestamp(duration or 0)
+    view_count = info.get("view_count", 0)
+    thumbnail = info.get("thumbnail") or f"https://i.ytimg.com/vi/{vid_id}/hqdefault.jpg"
+    upload_date = info.get("upload_date", "")
     if len(upload_date) == 8:
         upload_date = f"{upload_date[:4]}-{upload_date[4:6]}-{upload_date[6:]}"
 
     transcript = fetch_transcript_data(vid_id, info)
-    comments = parse_cleaned_comments(info.get('comments', []), max_comments=50) if fetch_comments else []
+    comments = parse_cleaned_comments(info.get("comments", []), max_comments=50) if fetch_comments else []
 
     return {
-        'id': vid_id,
-        'url': info.get('webpage_url') or url,
-        'title': title,
-        'uploader': uploader,
-        'channel_url': channel_url,
-        'duration': duration,
-        'duration_str': duration_str,
-        'view_count': view_count,
-        'upload_date': upload_date,
-        'thumbnail': thumbnail,
-        'tags': tags,
-        'tag_count': len(tags),
-        'description': description,
-        'transcript': transcript,
-        'has_transcript': len(transcript) > 0,
-        'comments': comments,
-        'comment_count': len(comments),
+        "id": vid_id,
+        "url": info.get("webpage_url") or url,
+        "title": title,
+        "uploader": uploader,
+        "channel_url": channel_url,
+        "duration": duration,
+        "duration_str": duration_str,
+        "view_count": view_count,
+        "upload_date": upload_date,
+        "thumbnail": thumbnail,
+        "tags": tags,
+        "tag_count": len(tags),
+        "description": description,
+        "transcript": transcript,
+        "has_transcript": len(transcript) > 0,
+        "comments": comments,
+        "comment_count": len(comments),
     }
+
 
 def generate_metadata_document(info: dict[str, Any], output_dir: str) -> dict[str, str]:
     """Generates both [METADATA].md and [METADATA].txt files with full details."""
     os.makedirs(output_dir, exist_ok=True)
-    clean_title = sanitize_filename(info.get('title', 'YouTube_Video'))
-    vid_id = info.get('id') or "video"
+    clean_title = sanitize_filename(info.get("title", "YouTube_Video"))
+    vid_id = info.get("id") or "video"
     base_name = os.path.join(output_dir, f"{clean_title} [{vid_id}] [METADATA]")
 
-    tags = info.get('tags', [])
+    tags = info.get("tags", [])
     tags_formatted_md = " ".join([f"`#{t}`" for t in tags]) if tags else "_No tags found for this video._"
     tags_formatted_csv = ", ".join(tags) if tags else "None"
 
-    transcript_list = info.get('transcript', [])
+    transcript_list = info.get("transcript", [])
     if transcript_list:
         transcript_md_lines = []
         transcript_txt_lines = []
         for item in transcript_list:
-            ts = item.get('timestamp', '00:00')
-            txt = item.get('text', '')
+            ts = item.get("timestamp", "00:00")
+            txt = item.get("text", "")
             transcript_md_lines.append(f"- **`[{ts}]`** {txt}")
             transcript_txt_lines.append(f"[{ts}] {txt}")
         transcript_md = "\n".join(transcript_md_lines)
@@ -845,14 +863,14 @@ def generate_metadata_document(info: dict[str, Any], output_dir: str) -> dict[st
         transcript_txt = "No transcript or captions available for this video."
 
     # Markdown Document
-    md_content = f"""# {info.get('title')}
+    md_content = f"""# {info.get("title")}
 
 ## Video Overview
-- **YouTube URL**: [{info.get('url')}]({info.get('url')})
-- **Channel / Creator**: [{info.get('uploader')}]({info.get('channel_url')})
-- **Duration**: {info.get('duration_str', 'N/A')}
-- **Upload Date**: {info.get('upload_date', 'N/A')}
-- **Views**: {info.get('view_count', 0):,}
+- **YouTube URL**: [{info.get("url")}]({info.get("url")})
+- **Channel / Creator**: [{info.get("uploader")}]({info.get("channel_url")})
+- **Duration**: {info.get("duration_str", "N/A")}
+- **Upload Date**: {info.get("upload_date", "N/A")}
+- **Views**: {info.get("view_count", 0):,}
 
 ---
 
@@ -866,7 +884,7 @@ def generate_metadata_document(info: dict[str, Any], output_dir: str) -> dict[st
 
 ## Description
 ```text
-{info.get('description', '')}
+{info.get("description", "")}
 ```
 
 ---
@@ -877,13 +895,13 @@ def generate_metadata_document(info: dict[str, Any], output_dir: str) -> dict[st
 
     # Plain Text Document
     txt_content = f"""================================================================================
-{info.get('title')}
+{info.get("title")}
 ================================================================================
-URL:         {info.get('url')}
-Channel:     {info.get('uploader')} ({info.get('channel_url')})
-Duration:    {info.get('duration_str', 'N/A')}
-Upload Date: {info.get('upload_date', 'N/A')}
-Views:       {info.get('view_count', 0):,}
+URL:         {info.get("url")}
+Channel:     {info.get("uploader")} ({info.get("channel_url")})
+Duration:    {info.get("duration_str", "N/A")}
+Upload Date: {info.get("upload_date", "N/A")}
+Views:       {info.get("view_count", 0):,}
 
 --------------------------------------------------------------------------------
 TAGS ({len(tags)}):
@@ -893,7 +911,7 @@ TAGS ({len(tags)}):
 --------------------------------------------------------------------------------
 DESCRIPTION:
 --------------------------------------------------------------------------------
-{info.get('description', '')}
+{info.get("description", "")}
 
 --------------------------------------------------------------------------------
 TRANSCRIPT:
@@ -916,8 +934,8 @@ TRANSCRIPT:
 def generate_json_document(info: dict[str, Any], output_dir: str) -> str:
     """Saves complete video data, transcript, comments, and stats into a clean formatted JSON file."""
     os.makedirs(output_dir, exist_ok=True)
-    clean_title = sanitize_filename(info.get('title', 'YouTube_Video'))
-    vid_id = info.get('id') or "video"
+    clean_title = sanitize_filename(info.get("title", "YouTube_Video"))
+    vid_id = info.get("id") or "video"
     json_path = os.path.join(output_dir, f"{clean_title} [{vid_id}] [METADATA].json")
 
     with open(json_path, "w", encoding="utf-8") as f:
@@ -925,23 +943,22 @@ def generate_json_document(info: dict[str, Any], output_dir: str) -> str:
 
     return json_path
 
+
 def resolve_video_format_string(resolution: str = "best") -> str:
     """Resolve format selector string based on chosen resolution."""
     formats = {
         "1080p": (
-            "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/"
-            "bestvideo[height<=1080]+bestaudio/best[height<=1080]"
+            "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/best[height<=1080]"
         ),
         "720p": (
-            "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/"
-            "bestvideo[height<=720]+bestaudio/best[height<=720]"
+            "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best[height<=720]"
         ),
         "480p": (
-            "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/"
-            "bestvideo[height<=480]+bestaudio/best[height<=480]"
+            "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=480]+bestaudio/best[height<=480]"
         ),
     }
     return formats.get(resolution, "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best")
+
 
 def download_media_bundle(
     url: str,
@@ -976,16 +993,16 @@ def download_media_bundle(
         raise DownloadCancelled("Task was cancelled by user")
 
     results: dict[str, Any] = {
-        'video_file': None,
-        'audio_file': None,
-        'doc_files': None,
-        'json_file': None,
-        'info': None,
+        "video_file": None,
+        "audio_file": None,
+        "doc_files": None,
+        "json_file": None,
+        "info": None,
     }
 
     # Step 1: Inspect metadata & extract transcript
     if progress_hook:
-        progress_hook({'phase': 'inspecting', 'message': 'Extracting tags, transcript, and video metadata...'})
+        progress_hook({"phase": "inspecting", "message": "Extracting tags, transcript, and video metadata..."})
 
     try:
         info = inspect_video(url, cookies_path, is_cancelled=is_cancelled)
@@ -995,9 +1012,9 @@ def download_media_bundle(
         clean_leftover_partial_files(target_dir, extract_video_id(url) or "")
         raise DownloadCancelled("Task was cancelled by user")
 
-    results['info'] = info
-    clean_title = sanitize_filename(info['title'])
-    vid_id = info.get('id') or extract_video_id(url) or "video"
+    results["info"] = info
+    clean_title = sanitize_filename(info["title"])
+    vid_id = info.get("id") or extract_video_id(url) or "video"
 
     # Step 2: Generate Metadata Document & JSON
     if is_cancelled and is_cancelled():
@@ -1006,15 +1023,15 @@ def download_media_bundle(
 
     if download_doc:
         if progress_hook:
-            progress_hook({'phase': 'document', 'message': 'Generating metadata and transcript document...'})
+            progress_hook({"phase": "document", "message": "Generating metadata and transcript document..."})
         docs = generate_metadata_document(info, target_dir)
-        results['doc_files'] = docs
+        results["doc_files"] = docs
 
     if download_json:
         if progress_hook:
-            progress_hook({'phase': 'json', 'message': 'Generating JSON metadata & transcript bundle...'})
+            progress_hook({"phase": "json", "message": "Generating JSON metadata & transcript bundle..."})
         json_file_path = generate_json_document(info, target_dir)
-        results['json_file'] = json_file_path
+        results["json_file"] = json_file_path
 
     # Step 3: Download Video (MP4)
     if is_cancelled and is_cancelled():
@@ -1026,46 +1043,48 @@ def download_media_bundle(
 
     if download_video:
         phase_label = (
-            f'Downloading Video Snippet ({int(start_time or 0)}s-{int(end_time or 0)}s)'
+            f"Downloading Video Snippet ({int(start_time or 0)}s-{int(end_time or 0)}s)"
             if is_snippet
-            else f'Downloading Video ({video_resolution})'
+            else f"Downloading Video ({video_resolution})"
         )
         if progress_hook:
-            progress_hook({'phase': 'video', 'message': f'{phase_label}...'})
+            progress_hook({"phase": "video", "message": f"{phase_label}..."})
 
         def yt_progress_video(d):
             if is_cancelled and is_cancelled():
                 clean_leftover_partial_files(target_dir, vid_id)
                 raise DownloadCancelled("Task was cancelled by user")
-            if progress_hook and d.get('status') == 'downloading':
-                progress_hook({
-                    'phase': 'video_downloading',
-                    'percent': d.get('_percent_str', '').strip(),
-                    'speed': d.get('_speed_str', '').strip(),
-                    'eta': d.get('_eta_str', '').strip(),
-                })
+            if progress_hook and d.get("status") == "downloading":
+                progress_hook(
+                    {
+                        "phase": "video_downloading",
+                        "percent": d.get("_percent_str", "").strip(),
+                        "speed": d.get("_speed_str", "").strip(),
+                        "eta": d.get("_eta_str", "").strip(),
+                    }
+                )
 
         video_fmt = resolve_video_format_string(video_resolution)
         video_opts = get_base_ydl_opts(cookies_path)
-        video_opts.update({
-            'format': video_fmt,
-            'outtmpl': os.path.join(target_dir, f"{clean_title} [{vid_id}]{clip_suffix} [VIDEO].%(ext)s"),
-            'merge_output_format': 'mp4',
-            'noplaylist': True,
-            'progress_hooks': [yt_progress_video],
-        })
+        video_opts.update(
+            {
+                "format": video_fmt,
+                "outtmpl": os.path.join(target_dir, f"{clean_title} [{vid_id}]{clip_suffix} [VIDEO].%(ext)s"),
+                "merge_output_format": "mp4",
+                "noplaylist": True,
+                "progress_hooks": [yt_progress_video],
+            }
+        )
 
         if is_snippet:
             eff_end = end_time if end_time is not None else float("inf")
-            video_opts['download_ranges'] = yt_dlp.utils.download_range_func(None, [(start_time or 0.0, eff_end)])
-            video_opts['force_keyframes_at_cuts'] = True
+            video_opts["download_ranges"] = yt_dlp.utils.download_range_func(None, [(start_time or 0.0, eff_end)])
+            video_opts["force_keyframes_at_cuts"] = True
 
         try:
             with yt_dlp.YoutubeDL(video_opts) as ydl:
                 ydl.download([url])
-                results['video_file'] = os.path.join(
-                    target_dir, f"{clean_title} [{vid_id}]{clip_suffix} [VIDEO].mp4"
-                )
+                results["video_file"] = os.path.join(target_dir, f"{clean_title} [{vid_id}]{clip_suffix} [VIDEO].mp4")
         except DownloadCancelled:
             clean_leftover_partial_files(target_dir, vid_id)
             raise
@@ -1080,50 +1099,53 @@ def download_media_bundle(
         bitrate = audio_bitrate if audio_bitrate in ["128", "192", "320"] else "192"
 
         audio_msg = (
-            f'Extracting standalone Audio Snippet to {codec.upper()} ({bitrate}k)...'
+            f"Extracting standalone Audio Snippet to {codec.upper()} ({bitrate}k)..."
             if is_snippet
-            else f'Extracting standalone Audio to {codec.upper()} ({bitrate}k)...'
+            else f"Extracting standalone Audio to {codec.upper()} ({bitrate}k)..."
         )
         if progress_hook:
-            progress_hook({
-                'phase': 'audio',
-                'message': audio_msg
-            })
+            progress_hook({"phase": "audio", "message": audio_msg})
 
         def yt_progress_audio(d):
             if is_cancelled and is_cancelled():
                 clean_leftover_partial_files(target_dir, vid_id)
                 raise DownloadCancelled("Task was cancelled by user")
-            if progress_hook and d.get('status') == 'downloading':
-                progress_hook({
-                    'phase': 'audio_downloading',
-                    'percent': d.get('_percent_str', '').strip(),
-                    'speed': d.get('_speed_str', '').strip(),
-                    'eta': d.get('_eta_str', '').strip(),
-                })
+            if progress_hook and d.get("status") == "downloading":
+                progress_hook(
+                    {
+                        "phase": "audio_downloading",
+                        "percent": d.get("_percent_str", "").strip(),
+                        "speed": d.get("_speed_str", "").strip(),
+                        "eta": d.get("_eta_str", "").strip(),
+                    }
+                )
 
         audio_opts = get_base_ydl_opts(cookies_path)
-        audio_opts.update({
-            'format': 'bestaudio/best',
-            'outtmpl': os.path.join(target_dir, f"{clean_title} [{vid_id}]{clip_suffix} [AUDIO].%(ext)s"),
-            'noplaylist': True,
-            'progress_hooks': [yt_progress_audio],
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': codec,
-                'preferredquality': bitrate,
-            }],
-        })
+        audio_opts.update(
+            {
+                "format": "bestaudio/best",
+                "outtmpl": os.path.join(target_dir, f"{clean_title} [{vid_id}]{clip_suffix} [AUDIO].%(ext)s"),
+                "noplaylist": True,
+                "progress_hooks": [yt_progress_audio],
+                "postprocessors": [
+                    {
+                        "key": "FFmpegExtractAudio",
+                        "preferredcodec": codec,
+                        "preferredquality": bitrate,
+                    }
+                ],
+            }
+        )
 
         if is_snippet:
             eff_end = end_time if end_time is not None else float("inf")
-            audio_opts['download_ranges'] = yt_dlp.utils.download_range_func(None, [(start_time or 0.0, eff_end)])
-            audio_opts['force_keyframes_at_cuts'] = True
+            audio_opts["download_ranges"] = yt_dlp.utils.download_range_func(None, [(start_time or 0.0, eff_end)])
+            audio_opts["force_keyframes_at_cuts"] = True
 
         try:
             with yt_dlp.YoutubeDL(audio_opts) as ydl:
                 ydl.download([url])
-                results['audio_file'] = os.path.join(
+                results["audio_file"] = os.path.join(
                     target_dir, f"{clean_title} [{vid_id}]{clip_suffix} [AUDIO].{codec}"
                 )
         except DownloadCancelled:
@@ -1135,7 +1157,7 @@ def download_media_bundle(
         raise DownloadCancelled("Task was cancelled by user")
 
     if progress_hook:
-        progress_hook({'phase': 'finished', 'message': 'All operations completed successfully!'})
+        progress_hook({"phase": "finished", "message": "All operations completed successfully!"})
 
     invalidate_storage_stats_cache()
     return results
@@ -1152,7 +1174,7 @@ if __name__ == "__main__":
             for idx, item in enumerate(items, 1):
                 print(f"\n--- [{idx}/{len(items)}] {item['title']} ---")
                 try:
-                    download_media_bundle(item['url'])
+                    download_media_bundle(item["url"])
                 except Exception as ex:
                     print(f"[!] Failed to process {item['url']}: {ex}")
         else:

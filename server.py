@@ -36,7 +36,6 @@ VALID_AUDIO_FORMATS = {"mp3", "wav", "m4a"}
 VALID_AUDIO_BITRATES = {"128", "192", "320"}
 
 
-
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Startup phase
@@ -93,6 +92,7 @@ async def add_security_headers(request: Request, call_next):
         response.headers["Pragma"] = "no-cache"
     return response
 
+
 # In-memory live task tracking protected by a reentrant lock
 TASKS_LOCK = threading.RLock()
 TASKS: dict[str, dict[str, Any]] = {}
@@ -104,6 +104,7 @@ interactive_executor = ThreadPoolExecutor(max_workers=2)
 AUTH_FAILURES_LOCK = threading.Lock()
 AUTH_FAILURES: dict[str, list[float]] = {}
 AUTH_BLOCKED_UNTIL: dict[str, float] = {}
+
 
 def is_direct_loopback(request: Request | None) -> bool:
     """Determine if a request is directly originating from a loopback peer without proxy forwarding."""
@@ -218,6 +219,7 @@ def get_client_ip(request: Request) -> str:
 
     return entries[0] if entries else peer_ip
 
+
 def check_auth_throttle(ip: str, now: float) -> None:
     """Raise 429 if IP is currently throttled due to excessive auth failures."""
     blocked_until = AUTH_BLOCKED_UNTIL.get(ip, 0.0)
@@ -229,6 +231,7 @@ def check_auth_throttle(ip: str, now: float) -> None:
             headers={"Retry-After": str(max(1, retry_after))},
         )
 
+
 def record_auth_failure(ip: str, now: float) -> None:
     """Record an authentication failure for IP. Block for 15 minutes if 10 failures in 5 minutes."""
     history = [t for t in AUTH_FAILURES.get(ip, []) if (now - t) <= 300.0]
@@ -237,6 +240,7 @@ def record_auth_failure(ip: str, now: float) -> None:
     if len(history) >= 10:
         AUTH_BLOCKED_UNTIL[ip] = now + 900.0  # 15 minutes block
         AUTH_FAILURES[ip] = []
+
 
 def verify_api_key(request: Request, x_api_key: str | None = Header(None)):
     """Verify API key using constant-time comparison and in-memory rate limiting."""
@@ -266,6 +270,7 @@ def verify_api_key(request: Request, x_api_key: str | None = Header(None)):
             AUTH_FAILURES.pop(client_ip, None)
             AUTH_BLOCKED_UNTIL.pop(client_ip, None)
     return True
+
 
 # Background thread to clean up completed/failed tasks from memory and time out hung tasks
 def task_cleanup_worker():
@@ -324,13 +329,16 @@ def task_cleanup_worker():
         except Exception:
             logger.warning("task cleanup failed", exc_info=True)
 
+
 cleanup_thread = threading.Thread(target=task_cleanup_worker, daemon=True)
 cleanup_thread.start()
+
 
 # Pydantic Request Models
 class InspectRequest(BaseModel):
     url: str
     fetch_comments: bool = False
+
 
 class BaseMediaRequest(BaseModel):
     download_video: bool = config.defaults.download_video
@@ -388,9 +396,11 @@ class BatchDownloadRequest(BaseMediaRequest):
 class AudacityRequest(BaseModel):
     file_path: str | None = None
 
+
 class CleanupRequest(BaseModel):
     max_storage_gb: float | None = None
     delete_after_days: int | None = None
+
 
 # Cross-platform folder opener
 def open_system_folder(folder_path: str):
@@ -406,10 +416,12 @@ def open_system_folder(folder_path: str):
         xdg_exe = shutil.which("xdg-open") or "xdg-open"
         subprocess.Popen([xdg_exe, resolved_path])  # noqa: S603
 
+
 @app.get("/healthz")
 def healthz():
     """Unauthenticated healthcheck endpoint for Docker / orchestration."""
     return {"status": "ok", "app": "The Extractor"}
+
 
 @app.get("/api/config")
 def api_get_config(authorized: bool = Depends(verify_api_key)):
@@ -438,19 +450,18 @@ def api_get_config(authorized: bool = Depends(verify_api_key)):
             "max_batch_size": config.processing.max_batch_size,
             "max_playlist_items": config.processing.max_playlist_items,
             "max_queue_size": config.processing.max_queue_size,
-        }
+        },
     }
+
 
 @app.post("/api/storage/cleanup")
 def api_storage_cleanup(req: CleanupRequest | None = None, authorized: bool = Depends(verify_api_key)):
     max_gb = req.max_storage_gb if req else None
     days = req.delete_after_days if req else None
-    result = downloader.perform_storage_cleanup(
-        max_storage_gb=max_gb,
-        delete_after_days=days
-    )
+    result = downloader.perform_storage_cleanup(max_storage_gb=max_gb, delete_after_days=days)
     result["storage"] = downloader.get_storage_stats()
     return {"status": "success", **result}
+
 
 @app.post("/api/inspect")
 def api_inspect(req: InspectRequest, authorized: bool = Depends(verify_api_key)):
@@ -458,7 +469,6 @@ def api_inspect(req: InspectRequest, authorized: bool = Depends(verify_api_key))
     valid, err_msg = downloader.is_valid_youtube_url(url)
     if not valid:
         raise HTTPException(status_code=400, detail=err_msg)
-
 
     # Check if playlist
     if downloader.is_playlist_url(url):
@@ -486,6 +496,7 @@ def api_inspect(req: InspectRequest, authorized: bool = Depends(verify_api_key))
     except Exception as e:
         logger.error(f"Inspect error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal inspection error. Check server logs.") from e
+
 
 @app.post("/api/comments")
 def api_get_comments(req: InspectRequest, max_comments: int = 50, authorized: bool = Depends(verify_api_key)):
@@ -526,6 +537,7 @@ def api_get_comments(req: InspectRequest, max_comments: int = 50, authorized: bo
     except Exception as e:
         logger.error(f"Fetch comments error: {e}", exc_info=True)
         raise HTTPException(status_code=502, detail=f"Failed to fetch comments: {e}") from e
+
 
 @app.get("/api/check-downloaded")
 def api_check_downloaded(url: str, authorized: bool = Depends(verify_api_key)):
@@ -677,13 +689,13 @@ def run_download_task(task_id: str, req: DownloadRequest):
                 status_override="cancelled" if cancelled else None,
             )
 
+
 def enqueue_download(req: DownloadRequest) -> str:
     with TASKS_LOCK:
         active_count = sum(1 for t in TASKS.values() if t.get("status") in ("queued", "running"))
         if active_count >= config.processing.max_queue_size:
             raise HTTPException(
-                status_code=429,
-                detail=f"Queue limit reached ({config.processing.max_queue_size} tasks). Please wait."
+                status_code=429, detail=f"Queue limit reached ({config.processing.max_queue_size} tasks). Please wait."
             )
 
         task_id = str(uuid.uuid4())
@@ -711,6 +723,7 @@ def enqueue_download(req: DownloadRequest) -> str:
 
     return task_id
 
+
 @app.post("/api/download")
 def api_download(req: DownloadRequest, request: Request = None, authorized: bool = Depends(verify_api_key)):
     url = req.url.strip()
@@ -724,6 +737,7 @@ def api_download(req: DownloadRequest, request: Request = None, authorized: bool
     task_id = enqueue_download(req)
     return {"status": "started", "task_id": task_id}
 
+
 @app.post("/api/batch-download")
 def api_batch_download(req: BatchDownloadRequest, request: Request = None, authorized: bool = Depends(verify_api_key)):
     raw_urls = [u.strip() for u in req.urls if u.strip()]
@@ -736,18 +750,14 @@ def api_batch_download(req: BatchDownloadRequest, request: Request = None, autho
     # Enforce max batch size limit
     if len(raw_urls) > config.processing.max_batch_size:
         raise HTTPException(
-            status_code=400,
-            detail=f"Batch size exceeds maximum limit of {config.processing.max_batch_size} URLs"
+            status_code=400, detail=f"Batch size exceeds maximum limit of {config.processing.max_batch_size} URLs"
         )
 
     # Validate each raw URL before expansion
     for u in raw_urls:
         valid, err_msg = downloader.is_valid_youtube_url(u)
         if not valid:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid URL in batch: {err_msg} ({u})"
-            )
+            raise HTTPException(status_code=400, detail=f"Invalid URL in batch: {err_msg} ({u})")
 
     # Deduplicate input URLs while preserving order
     deduped_urls = list(dict.fromkeys(raw_urls))
@@ -773,13 +783,9 @@ def api_batch_download(req: BatchDownloadRequest, request: Request = None, autho
         if u not in seen_final:
             valid, err_msg = downloader.is_valid_youtube_url(u)
             if not valid:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Invalid URL in batch: {err_msg} ({u})"
-                )
+                raise HTTPException(status_code=400, detail=f"Invalid URL in batch: {err_msg} ({u})")
             seen_final.add(u)
             final_urls.append(u)
-
 
     # Atomically check capacity and allocate all batch TASKS entries under lock
     created_tasks = []
@@ -789,7 +795,7 @@ def api_batch_download(req: BatchDownloadRequest, request: Request = None, autho
             available_slots = max(0, config.processing.max_queue_size - active_count)
             raise HTTPException(
                 status_code=429,
-                detail=f"Queue capacity exceeded. Available slots: {available_slots}, requested: {len(final_urls)}."
+                detail=f"Queue capacity exceeded. Available slots: {available_slots}, requested: {len(final_urls)}.",
             )
 
         now = time.time()
@@ -847,13 +853,13 @@ def api_batch_download(req: BatchDownloadRequest, request: Request = None, autho
             logger.warning("Failed to rollback batch tasks in DB", exc_info=True)
         raise
 
-
     return {
         "status": "started",
         "tasks": task_ids,
         "total": len(task_ids),
         "skipped": skipped_urls,
     }
+
 
 # Bulk progress endpoint (EXT-004)
 @app.get("/api/progress")
@@ -890,6 +896,7 @@ def api_bulk_progress(authorized: bool = Depends(verify_api_key)):
     }
     return {"status": "success", "summary": summary, "tasks": tasks_list}
 
+
 @app.get("/api/progress/{task_id}")
 def api_progress(task_id: str, authorized: bool = Depends(verify_api_key)):
     with TASKS_LOCK:
@@ -901,6 +908,7 @@ def api_progress(task_id: str, authorized: bool = Depends(verify_api_key)):
             if not task_data.get("message") or task_data.get("message") == "Processing download...":
                 task_data["message"] = "Download cancelled by user"
         return task_data
+
 
 # Task cancellation endpoint (EXT-006)
 @app.post("/api/tasks/{task_id}/cancel")
@@ -946,6 +954,7 @@ def api_cancel_task(task_id: str, authorized: bool = Depends(verify_api_key)):
         "task_status": "cancelled",
     }
 
+
 @app.post("/api/tasks/cancel-all")
 def api_cancel_all_tasks(authorized: bool = Depends(verify_api_key)):
     count = 0
@@ -974,6 +983,7 @@ def api_cancel_all_tasks(authorized: bool = Depends(verify_api_key)):
 
     return {"status": "success", "cancelled_count": count}
 
+
 # History Endpoints with Pagination & Retention
 @app.get("/api/history")
 def api_get_history(
@@ -982,7 +992,7 @@ def api_get_history(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     search: str | None = None,
-    authorized: bool = Depends(verify_api_key)
+    authorized: bool = Depends(verify_api_key),
 ):
 
     safe_limit = max(1, min(limit, 200))
@@ -1004,13 +1014,16 @@ def api_delete_history(item_id: int, delete_files: bool = False, authorized: boo
         raise HTTPException(status_code=404, detail="Item not found")
     return {"status": "success", "deleted_id": item_id}
 
+
 @app.delete("/api/history")
 def api_clear_history(delete_files: bool = False, authorized: bool = Depends(verify_api_key)):
     database.clear_all_history(delete_files=delete_files)
     return {"status": "success", "message": "History cleared"}
 
+
 # Module-level concurrency guard for folder picker dialog
 FOLDER_PICKER_LOCK = threading.Lock()
+
 
 # OS Integration Endpoints
 @app.post("/api/browse-folder")
@@ -1063,6 +1076,7 @@ def api_browse_folder(request: Request, authorized: bool = Depends(verify_api_ke
     finally:
         FOLDER_PICKER_LOCK.release()
 
+
 @app.post("/api/open-folder")
 def api_open_folder(authorized: bool = Depends(verify_api_key)):
     try:
@@ -1073,13 +1087,14 @@ def api_open_folder(authorized: bool = Depends(verify_api_key)):
         logger.error(f"Open folder error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to open folder") from e
 
+
 @app.post("/api/open-audacity")
 def api_open_audacity(req: AudacityRequest, authorized: bool = Depends(verify_api_key)):
     audacity_path = config.get_audacity_executable()
     if not audacity_path:
         raise HTTPException(
             status_code=404,
-            detail="Audacity executable not found. Please install Audacity or configure its path in config.yaml"
+            detail="Audacity executable not found. Please install Audacity or configure its path in config.yaml",
         )
 
     target_file = req.file_path
@@ -1096,7 +1111,9 @@ def api_open_audacity(req: AudacityRequest, authorized: bool = Depends(verify_ap
             target_file = audio_files[0]
 
     # Validate that target_file is a safe download path or is recorded in extraction history
-    if target_file and not (database.is_safe_download_path(target_file) or database.is_known_media_file_in_history(target_file)):
+    if target_file and not (
+        database.is_safe_download_path(target_file) or database.is_known_media_file_in_history(target_file)
+    ):
         raise HTTPException(status_code=403, detail="Forbidden file path")
 
     try:
@@ -1109,6 +1126,7 @@ def api_open_audacity(req: AudacityRequest, authorized: bool = Depends(verify_ap
         logger.error(f"Launch Audacity error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to launch Audacity") from e
 
+
 # Mount static web UI (locates package web assets relative to file, not CWD)
 WEB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
 os.makedirs(WEB_DIR, exist_ok=True)
@@ -1116,5 +1134,5 @@ app.mount("/", StaticFiles(directory=WEB_DIR, html=True), name="web")
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host=config.app.host, port=config.app.port)
 
+    uvicorn.run(app, host=config.app.host, port=config.app.port)

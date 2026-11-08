@@ -8,6 +8,7 @@ from config import config
 
 DB_PATH = os.environ.get("EXTRACTOR_DB", config.database_path)
 
+
 def get_db_connection() -> sqlite3.Connection:
     os.makedirs(os.path.dirname(os.path.abspath(DB_PATH)), exist_ok=True)
     conn = sqlite3.connect(DB_PATH, timeout=10)
@@ -16,6 +17,7 @@ def get_db_connection() -> sqlite3.Connection:
     conn.execute("PRAGMA cache_size=-4000")  # 4MB cache
     conn.row_factory = sqlite3.Row
     return conn
+
 
 def init_db():
     """Initialize SQLite database tables for persistent job history with indexing."""
@@ -84,31 +86,43 @@ def init_db():
             WHERE status IN ('queued', 'running')
         """)
 
+
 def record_task_created(task_id: str, url: str) -> None:
     with get_db_connection() as conn:
-        conn.execute("""
+        conn.execute(
+            """
             INSERT OR IGNORE INTO extraction_history (task_id, url, status)
             VALUES (?, ?, 'queued')
-        """, (task_id, url))
+        """,
+            (task_id, url),
+        )
+
 
 def record_batch_tasks_created(task_pairs: list[tuple[str, str]]) -> None:
     """Atomically record multiple created tasks in SQLite within a single transaction."""
     if not task_pairs:
         return
     with get_db_connection() as conn:
-        conn.executemany("""
+        conn.executemany(
+            """
             INSERT OR IGNORE INTO extraction_history (task_id, url, status)
             VALUES (?, ?, 'queued')
-        """, task_pairs)
+        """,
+            task_pairs,
+        )
+
 
 def rollback_batch_tasks(task_ids: list[str]) -> None:
     """Remove batch tasks that failed before submission."""
     if not task_ids:
         return
     with get_db_connection() as conn:
-        conn.executemany("""
+        conn.executemany(
+            """
             DELETE FROM extraction_history WHERE task_id = ? AND status = 'queued'
-        """, [(tid,) for tid in task_ids])
+        """,
+            [(tid,) for tid in task_ids],
+        )
 
 
 def record_task_completed(
@@ -137,7 +151,8 @@ def record_task_completed(
     json_file = _norm(json_path)
 
     with get_db_connection() as conn:
-        conn.execute("""
+        conn.execute(
+            """
             INSERT INTO extraction_history (
                 task_id, url, video_id, title, channel, duration, thumbnail,
                 tags_count, has_transcript, video_path, audio_path, doc_md_path, doc_txt_path, json_path,
@@ -160,25 +175,28 @@ def record_task_completed(
                 status=excluded.status,
                 error_message=excluded.error_message,
                 completed_at=excluded.completed_at
-        """, (
-            task_id,
-            url,
-            info.get("id"),
-            info.get("title"),
-            info.get("uploader"),
-            info.get("duration_str"),
-            info.get("thumbnail"),
-            info.get("tag_count") if info.get("tag_count") is not None else len(info.get("tags") or []),
-            1 if info.get("has_transcript") else 0,
-            video_file,
-            audio_file,
-            md_file,
-            txt_file,
-            json_file,
-            status,
-            error_message,
-            completed_at
-        ))
+        """,
+            (
+                task_id,
+                url,
+                info.get("id"),
+                info.get("title"),
+                info.get("uploader"),
+                info.get("duration_str"),
+                info.get("thumbnail"),
+                info.get("tag_count") if info.get("tag_count") is not None else len(info.get("tags") or []),
+                1 if info.get("has_transcript") else 0,
+                video_file,
+                audio_file,
+                md_file,
+                txt_file,
+                json_file,
+                status,
+                error_message,
+                completed_at,
+            ),
+        )
+
 
 def record_known_output_dir(dir_path: str, source: str = "root") -> None:
     """Record an approved custom output directory in the database."""
@@ -261,38 +279,52 @@ def is_known_media_file_in_history(file_path: str) -> bool:
             LIMIT 1
             """,
             (
-                raw_f, real_f, norm_f,
-                raw_f, real_f, norm_f,
-                raw_f, real_f, norm_f,
-                raw_f, real_f, norm_f,
-                raw_f, real_f, norm_f,
+                raw_f,
+                real_f,
+                norm_f,
+                raw_f,
+                real_f,
+                norm_f,
+                raw_f,
+                real_f,
+                norm_f,
+                raw_f,
+                real_f,
+                norm_f,
+                raw_f,
+                real_f,
+                norm_f,
             ),
         )
         return cursor.fetchone() is not None
+
 
 def get_history(limit: int = 50, offset: int = 0, search: str | None = None) -> list[dict[str, Any]]:
     with get_db_connection() as conn:
         if search and search.strip():
             query_term = f"%{search.strip()}%"
-            cursor = conn.execute("""
+            cursor = conn.execute(
+                """
                 SELECT * FROM extraction_history
                 WHERE title LIKE ? OR url LIKE ? OR channel LIKE ? OR video_id LIKE ?
                 ORDER BY id DESC
                 LIMIT ? OFFSET ?
-            """, (query_term, query_term, query_term, query_term, limit, offset))
+            """,
+                (query_term, query_term, query_term, query_term, limit, offset),
+            )
         else:
-            cursor = conn.execute("""
+            cursor = conn.execute(
+                """
                 SELECT * FROM extraction_history
                 ORDER BY id DESC
                 LIMIT ? OFFSET ?
-            """, (limit, offset))
+            """,
+                (limit, offset),
+            )
         return [dict(row) for row in cursor.fetchall()]
 
-def get_history_paginated(
-    page: int = 1,
-    page_size: int = 50,
-    search: str | None = None
-) -> dict[str, Any]:
+
+def get_history_paginated(page: int = 1, page_size: int = 50, search: str | None = None) -> dict[str, Any]:
     """Retrieve paginated history items with total count."""
     page = max(1, page)
     page_size = max(1, min(page_size, 200))
@@ -301,27 +333,36 @@ def get_history_paginated(
     with get_db_connection() as conn:
         if search and search.strip():
             query_term = f"%{search.strip()}%"
-            count_cursor = conn.execute("""
+            count_cursor = conn.execute(
+                """
                 SELECT COUNT(*) as cnt FROM extraction_history
                 WHERE title LIKE ? OR url LIKE ? OR channel LIKE ? OR video_id LIKE ?
-            """, (query_term, query_term, query_term, query_term))
+            """,
+                (query_term, query_term, query_term, query_term),
+            )
             total = count_cursor.fetchone()["cnt"]
 
-            items_cursor = conn.execute("""
+            items_cursor = conn.execute(
+                """
                 SELECT * FROM extraction_history
                 WHERE title LIKE ? OR url LIKE ? OR channel LIKE ? OR video_id LIKE ?
                 ORDER BY id DESC
                 LIMIT ? OFFSET ?
-            """, (query_term, query_term, query_term, query_term, page_size, offset))
+            """,
+                (query_term, query_term, query_term, query_term, page_size, offset),
+            )
         else:
             count_cursor = conn.execute("SELECT COUNT(*) as cnt FROM extraction_history")
             total = count_cursor.fetchone()["cnt"]
 
-            items_cursor = conn.execute("""
+            items_cursor = conn.execute(
+                """
                 SELECT * FROM extraction_history
                 ORDER BY id DESC
                 LIMIT ? OFFSET ?
-            """, (page_size, offset))
+            """,
+                (page_size, offset),
+            )
 
         items = [dict(row) for row in items_cursor.fetchall()]
         return {
@@ -331,15 +372,19 @@ def get_history_paginated(
             "page_size": page_size,
         }
 
+
 def find_download_by_url(url: str) -> dict[str, Any] | None:
     """Find a completed download record by URL or video_id, ensuring at least one output file still exists on disk."""
     clean_url = url.strip()
     with get_db_connection() as conn:
-        cursor = conn.execute("""
+        cursor = conn.execute(
+            """
             SELECT * FROM extraction_history
             WHERE (url = ? OR video_id = ?) AND status = 'completed'
             ORDER BY id DESC LIMIT 5
-        """, (clean_url, clean_url))
+        """,
+            (clean_url, clean_url),
+        )
         rows = cursor.fetchall()
         for row in rows:
             record = dict(row)
@@ -357,10 +402,8 @@ def find_download_by_url(url: str) -> dict[str, Any] | None:
                 return record
         return None
 
-def apply_history_retention(
-    max_records: int | None = None,
-    retention_days: int | None = None
-) -> dict[str, int]:
+
+def apply_history_retention(max_records: int | None = None, retention_days: int | None = None) -> dict[str, int]:
     """Prune historical database records exceeding max_records or older than retention_days."""
     max_rec = max_records if max_records is not None else config.history.max_records
     ret_days = retention_days if retention_days is not None else config.history.retention_days
@@ -371,23 +414,24 @@ def apply_history_retention(
         if ret_days and ret_days > 0:
             cutoff = datetime.now(UTC) - timedelta(days=ret_days)
             cutoff_str = cutoff.strftime("%Y-%m-%d %H:%M:%S")
-            cur = conn.execute(
-                "DELETE FROM extraction_history WHERE created_at < ?",
-                (cutoff_str,)
-            )
+            cur = conn.execute("DELETE FROM extraction_history WHERE created_at < ?", (cutoff_str,))
             deleted_count += cur.rowcount
 
         # 2. Prune records exceeding max_records
         if max_rec and max_rec > 0:
-            cur = conn.execute("""
+            cur = conn.execute(
+                """
                 DELETE FROM extraction_history
                 WHERE id NOT IN (
                     SELECT id FROM extraction_history ORDER BY id DESC LIMIT ?
                 )
-            """, (max_rec,))
+            """,
+                (max_rec,),
+            )
             deleted_count += cur.rowcount
 
     return {"deleted_records": deleted_count}
+
 
 def _remove_safe_files(rows: list[sqlite3.Row] | sqlite3.Cursor) -> None:
     for row in rows:
@@ -400,13 +444,14 @@ def _remove_safe_files(rows: list[sqlite3.Row] | sqlite3.Cursor) -> None:
                 with contextlib.suppress(OSError):
                     os.remove(fpath)
 
+
 def delete_history_item(item_id: int, delete_files: bool = False) -> bool:
     with get_db_connection() as conn:
         if delete_files:
             cursor = conn.execute(
                 "SELECT video_path, audio_path, doc_md_path, doc_txt_path, json_path "
                 "FROM extraction_history WHERE id = ?",
-                (item_id,)
+                (item_id,),
             )
             row = cursor.fetchone()
             if row:
@@ -414,12 +459,12 @@ def delete_history_item(item_id: int, delete_files: bool = False) -> bool:
         cursor = conn.execute("DELETE FROM extraction_history WHERE id = ?", (item_id,))
         return cursor.rowcount > 0
 
+
 def clear_all_history(delete_files: bool = False) -> None:
     with get_db_connection() as conn:
         if delete_files:
             cursor = conn.execute(
-                "SELECT video_path, audio_path, doc_md_path, doc_txt_path, json_path "
-                "FROM extraction_history"
+                "SELECT video_path, audio_path, doc_md_path, doc_txt_path, json_path FROM extraction_history"
             )
             _remove_safe_files(cursor.fetchall())
         conn.execute("DELETE FROM extraction_history")
@@ -435,7 +480,8 @@ def null_deleted_file_paths(file_paths: list[str]) -> int:
 
     with get_db_connection() as conn:
         for p in norm_paths:
-            cur = conn.execute("""
+            cur = conn.execute(
+                """
                 UPDATE extraction_history
                 SET video_path = CASE WHEN video_path = ? THEN NULL ELSE video_path END,
                     audio_path = CASE WHEN audio_path = ? THEN NULL ELSE audio_path END,
@@ -443,7 +489,9 @@ def null_deleted_file_paths(file_paths: list[str]) -> int:
                     doc_txt_path = CASE WHEN doc_txt_path = ? THEN NULL ELSE doc_txt_path END,
                     json_path = CASE WHEN json_path = ? THEN NULL ELSE json_path END
                 WHERE video_path = ? OR audio_path = ? OR doc_md_path = ? OR doc_txt_path = ? OR json_path = ?
-            """, (p, p, p, p, p, p, p, p, p, p))
+            """,
+                (p, p, p, p, p, p, p, p, p, p),
+            )
             updated_count += cur.rowcount
 
     return updated_count
@@ -451,5 +499,3 @@ def null_deleted_file_paths(file_paths: list[str]) -> int:
 
 # Auto-initialize on import
 init_db()
-
-
