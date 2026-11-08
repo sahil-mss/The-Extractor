@@ -142,4 +142,55 @@ def test_known_output_dirs_trust_revocation(tmp_path, monkeypatch):
     assert database.is_known_media_file_in_history(str(sample_file)) is True
 
 
+def test_is_known_media_file_in_history_performance(tmp_path):
+    import time
+
+    test_db = str(tmp_path / "perf_test.db")
+    database.DB_PATH = test_db
+    database.init_db()
+
+    target_hit = str(tmp_path / "hit_audio_target.mp3")
+    target_miss = str(tmp_path / "miss_audio_target.mp3")
+
+    # Seed 50,000 rows
+    rows = [
+        (
+            f"task-{i}",
+            f"https://youtube.com/watch?v=perf{i}",
+            "completed",
+            f"/downloads/video_{i}.mp4",
+            target_hit if i == 25000 else f"/downloads/audio_{i}.mp3",
+            f"/downloads/doc_{i}.md",
+            f"/downloads/doc_{i}.txt",
+            f"/downloads/json_{i}.json",
+        )
+        for i in range(50000)
+    ]
+
+    with database.get_db_connection() as conn:
+        conn.executemany(
+            """
+            INSERT INTO extraction_history (
+                task_id, url, status, video_path, audio_path, doc_md_path, doc_txt_path, json_path
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            rows,
+        )
+
+    # Benchmark Hit
+    t0 = time.perf_counter()
+    hit_res = database.is_known_media_file_in_history(target_hit)
+    t_hit = time.perf_counter() - t0
+    assert hit_res is True
+    assert t_hit < 0.05, f"Hit took too long: {t_hit:.4f}s >= 0.05s"
+
+    # Benchmark Miss
+    t0 = time.perf_counter()
+    miss_res = database.is_known_media_file_in_history(target_miss)
+    t_miss = time.perf_counter() - t0
+    assert miss_res is False
+    assert t_miss < 0.05, f"Miss took too long: {t_miss:.4f}s >= 0.05s"
+
+
+
 

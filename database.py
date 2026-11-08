@@ -53,6 +53,12 @@ def init_db():
         if "json_path" not in columns:
             conn.execute("ALTER TABLE extraction_history ADD COLUMN json_path TEXT")
 
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_history_video_path ON extraction_history(video_path)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_history_audio_path ON extraction_history(audio_path)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_history_doc_md_path ON extraction_history(doc_md_path)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_history_doc_txt_path ON extraction_history(doc_txt_path)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_history_json_path ON extraction_history(json_path)")
+
         # Table for accepted custom output directories with source tracking
         conn.execute("""
         CREATE TABLE IF NOT EXISTS known_output_dirs (
@@ -121,6 +127,15 @@ def record_task_completed(
     txt_path = doc_files.get("txt") if isinstance(doc_files, dict) else None
     json_path = results.get("json_file")
 
+    def _norm(p: str | None) -> str | None:
+        return os.path.realpath(os.path.abspath(p)) if p else None
+
+    video_file = _norm(results.get("video_file"))
+    audio_file = _norm(results.get("audio_file"))
+    md_file = _norm(md_path)
+    txt_file = _norm(txt_path)
+    json_file = _norm(json_path)
+
     with get_db_connection() as conn:
         conn.execute("""
             INSERT INTO extraction_history (
@@ -155,11 +170,11 @@ def record_task_completed(
             info.get("thumbnail"),
             info.get("tag_count") if info.get("tag_count") is not None else len(info.get("tags") or []),
             1 if info.get("has_transcript") else 0,
-            results.get("video_file"),
-            results.get("audio_file"),
-            md_path,
-            txt_path,
-            json_path,
+            video_file,
+            audio_file,
+            md_file,
+            txt_file,
+            json_file,
             status,
             error_message,
             completed_at
@@ -227,22 +242,33 @@ def is_safe_download_path(file_path: str) -> bool:
 
 
 def is_known_media_file_in_history(file_path: str) -> bool:
-    """Exact match check if a file path was generated and recorded in extraction_history."""
+    """Check if a file path was generated and recorded in extraction_history.
+
+    Uses indexed SQL equality lookup matching raw path, realpath, and normcase variants.
+    """
     if not file_path:
         return False
-    real_f = os.path.normcase(os.path.realpath(os.path.abspath(file_path)))
+    raw_f = file_path
+    real_f = os.path.realpath(os.path.abspath(file_path))
+    norm_f = os.path.normcase(real_f)
+
     with get_db_connection() as conn:
         cursor = conn.execute(
-            "SELECT video_path, audio_path, doc_md_path, doc_txt_path, json_path "
-            "FROM extraction_history WHERE audio_path IS NOT NULL OR video_path IS NOT NULL"
+            """
+            SELECT 1 FROM extraction_history
+            WHERE video_path IN (?, ?, ?) OR audio_path IN (?, ?, ?) OR doc_md_path IN (?, ?, ?)
+               OR doc_txt_path IN (?, ?, ?) OR json_path IN (?, ?, ?)
+            LIMIT 1
+            """,
+            (
+                raw_f, real_f, norm_f,
+                raw_f, real_f, norm_f,
+                raw_f, real_f, norm_f,
+                raw_f, real_f, norm_f,
+                raw_f, real_f, norm_f,
+            ),
         )
-        for row in cursor.fetchall():
-            for p in row:
-                if p:
-                    cand = os.path.normcase(os.path.realpath(os.path.abspath(p)))
-                    if cand == real_f:
-                        return True
-    return False
+        return cursor.fetchone() is not None
 
 def get_history(limit: int = 50, offset: int = 0, search: str | None = None) -> list[dict[str, Any]]:
     with get_db_connection() as conn:
