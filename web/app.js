@@ -1411,7 +1411,11 @@ navSettingsBtn.addEventListener("click", async () => {
           body: JSON.stringify({}),
         });
         const cData = await cRes.json();
-        showToast(`Cleaned ${cData.deleted_files} file(s) (${cData.freed_mb} MB freed)!`);
+        let toastMsg = `Cleaned ${cData.deleted_files} file(s) (${cData.freed_mb} MB freed)!`;
+        if (cData.failed_deletions && cData.failed_deletions > 0) {
+          toastMsg += ` (${cData.failed_deletions} file(s) could not be deleted)`;
+        }
+        showToast(toastMsg);
         refreshSystemStatus();
       } catch (e) {
         showToast("Storage cleanup failed");

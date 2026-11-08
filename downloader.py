@@ -466,6 +466,7 @@ def perform_storage_cleanup(
 
     deleted_count = 0
     freed_bytes = 0
+    failed_deletions = 0
     deleted_paths: list[str] = []
 
     # 1. Clean by age if configured
@@ -480,7 +481,9 @@ def perform_storage_cleanup(
                     freed_bytes += entry["size"]
                     total_bytes -= entry["size"]
                     deleted_paths.append(entry["path"])
-                except OSError:
+                except OSError as err:
+                    failed_deletions += 1
+                    logger.warning(f"Could not delete old file {entry['path']}: {err}")
                     remaining_entries.append(entry)
             else:
                 remaining_entries.append(entry)
@@ -498,8 +501,9 @@ def perform_storage_cleanup(
                 freed_bytes += entry["size"]
                 total_bytes -= entry["size"]
                 deleted_paths.append(entry["path"])
-            except OSError:
-                pass
+            except OSError as err:
+                failed_deletions += 1
+                logger.warning(f"Could not delete file {entry['path']} during capacity pruning: {err}")
 
     if deleted_paths:
         try:
@@ -512,6 +516,7 @@ def perform_storage_cleanup(
 
     return {
         "deleted_files": deleted_count,
+        "failed_deletions": failed_deletions,
         "freed_bytes": freed_bytes,
         "freed_mb": round(freed_bytes / (1024**2), 2),
         "remaining_bytes": total_bytes,

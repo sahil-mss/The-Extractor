@@ -207,9 +207,35 @@ def test_storage_stats_and_cleanup(tmp_path):
     # Cleanup by size cap: cap at very small size
     cleanup_res2 = perform_storage_cleanup(str(tmp_path), max_storage_gb=0.0000001)
     assert cleanup_res2["deleted_files"] == 1
+    assert cleanup_res2["failed_deletions"] == 0
     assert not f2.exists()
     assert gitkeep.exists()
     assert part_file.exists()
+
+
+def test_storage_cleanup_failed_deletions_logged(tmp_path, monkeypatch, caplog):
+    import logging
+    import os
+    import time
+
+    from downloader import perform_storage_cleanup
+
+    f = tmp_path / "locked_file.mp4"
+    f.write_bytes(b"data" * 500)
+    old_time = time.time() - (20 * 86400)
+    os.utime(f, (old_time, old_time))
+
+    def mock_remove_error(path):
+        raise OSError("Permission denied / file in use")
+
+    monkeypatch.setattr(os, "remove", mock_remove_error)
+
+    with caplog.at_level(logging.WARNING):
+        res = perform_storage_cleanup(str(tmp_path), delete_after_days=5)
+
+    assert res["deleted_files"] == 0
+    assert res["failed_deletions"] == 1
+    assert "Could not delete old file" in caplog.text
 
 
 def test_check_ytdlp_version():
