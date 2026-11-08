@@ -17,10 +17,13 @@ All notable changes to **The Extractor** will be documented in this file.
 - **Bandit Security Rule Enforcement**: Activated Ruff Bandit rules (`S`) with codebase annotations and per-file test exclusions.
 
 ### Code Quality, Tooling & Testing
+- **Source-Only Code Coverage Scoping**: Configured `tool.coverage.run` to omit tests and virtual environments, aligning `--cov-fail-under=75` with source code metrics on Ubuntu 3.12 CI jobs.
+- **Ruff Formatting Standardization**: Applied `ruff format` repository-wide, pinned `ruff==0.17.4` across dependencies and pre-commit hooks, and added `ruff format --check .` to CI lint validation.
+- **Cleanup Error Visibility**: Instrumented `perform_storage_cleanup()` to log file deletion errors, track `failed_deletions`, and surface failed counts via the `/api/storage/cleanup` API response and UI toast notifications.
+- **Scheduled Vulnerability Auditing**: Scheduled weekly automated `pip-audit` runs in CI (`cron: '0 4 * * 1'`) and marked pull request audits as non-blocking (`continue-on-error: true`).
 - **Vulnerability Auditing in CI**: Added dedicated `pip-audit` security vulnerability scanning job to GitHub Actions CI workflow and updated pinned dependencies (`certifi>=2026.10.18`, `urllib3>=2.8.0`).
-- **Enforced Test Coverage Threshold**: Configured `--cov=. --cov-fail-under=85` in CI test steps; current test coverage sits above 86%.
 - **Pre-commit Hooks**: Added `.pre-commit-config.yaml` specifying Ruff lint and formatting hooks.
-- **CLI & Launcher Test Suite**: Added dedicated regression test suites `tests/test_main.py` and `tests/test_launcher.py` covering argument parsing, hot reloading, browser dispatch, venv initialization, and fallback logic, elevating overall test suite to 116 passing tests.
+- **CLI & Launcher Test Suite**: Added dedicated regression test suites `tests/test_main.py` and `tests/test_launcher.py` covering argument parsing, hot reloading, browser dispatch, venv initialization, and fallback logic, elevating overall test suite to 117 passing tests.
 
 ## [2.8.0] - 2026-11-07
 
