@@ -91,8 +91,8 @@ def main():
         ret_res = database.apply_history_retention()
         if ret_res.get("deleted_records", 0) > 0:
             print(f"  📜 History Retention: Pruned {ret_res['deleted_records']} old record(s)")
-    except Exception:
-        pass  # noqa: S110
+    except Exception as e:
+        print(f"  ⚠️ Warning: Database retention check failed: {e}", file=sys.stderr)
 
     # Check disk usage and run retention policy if configured
     try:
@@ -124,8 +124,8 @@ def main():
             print(f"  ⚠️  NOTICE: yt-dlp is outdated ({inst_v} -> {latest_v}). Run: pip install --upgrade \"yt-dlp[default]\"")
         elif ytdlp_status.get("checked"):
             print(f"  ✅ yt-dlp:  Up to date ({ytdlp_status['installed']})")
-    except Exception:
-        pass  # noqa: S110
+    except Exception as e:
+        print(f"  ⚠️ Warning: Startup checks failed: {e}", file=sys.stderr)
 
     print("=" * 70)
 

@@ -21,7 +21,7 @@ try:
 except ImportError:
     YouTubeTranscriptApi = None
 
-from config import config
+from config import config, logger
 
 ALLOWED_YOUTUBE_DOMAINS = {
     "youtube.com",
@@ -180,8 +180,8 @@ def get_detected_js_runtime() -> dict[str, Any]:
                     "version": str(getattr(info, "version", "unknown")),
                     "supported": False,
                 }
-    except Exception:
-        pass  # noqa: S110
+    except Exception as e:
+        logger.debug(f"yt-dlp private JS runtime check failed: {e}")
 
     # 2. Fallback manual version detection and comparison
     candidates = [
@@ -216,8 +216,9 @@ def get_detected_js_runtime() -> dict[str, Any]:
                 "version": version_str,
                 "supported": is_supported,
             }
-        except Exception:
-            continue  # noqa: S112
+        except Exception as e:
+            logger.debug(f"Failed to check runtime binary {bin_name}: {e}")
+            continue
 
     return {
         "available": False,
@@ -316,9 +317,9 @@ def check_ytdlp_version(force_refresh: bool = False) -> dict[str, Any]:
                             result["is_outdated"] = _parse_ver(latest_ver) > _parse_ver(installed_ver)
                         except ValueError:
                             result["is_outdated"] = (latest_ver != installed_ver)
-        except Exception:
+        except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError) as e:
             # Offline or PyPI unreachable: graceful fallback
-            pass  # noqa: S110
+            logger.debug(f"yt-dlp version check against PyPI failed: {e}")
 
         _YTDLP_VERSION_CACHE = dict(result)
         _YTDLP_VERSION_CACHE_TIME = now
@@ -502,8 +503,8 @@ def perform_storage_cleanup(
         try:
             import database
             database.null_deleted_file_paths(deleted_paths)
-        except Exception:
-            pass  # noqa: S110
+        except Exception as e:
+            logger.warning(f"Could not null deleted file paths in database: {e}")
         invalidate_storage_stats_cache()
 
     return {
@@ -673,9 +674,9 @@ def fetch_transcript_data(video_id: str, ydl_info: dict | None = None) -> list[d
                             'timestamp': format_timestamp(float(start)),
                             'text': text
                         })
-        except Exception:
+        except Exception as e:
             # Non-fatal: transcript unavailable or network error
-            pass  # noqa: S110
+            logger.debug(f"Optional transcript fetch failed or unavailable: {e}")
 
     return transcript_items
 

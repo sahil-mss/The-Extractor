@@ -185,8 +185,8 @@ def load_config(config_path: str | None = None) -> Config:
                 loaded = yaml.safe_load(f)
                 if isinstance(loaded, dict):
                     data = loaded
-        except Exception:
-            pass  # noqa: S110
+        except (OSError, yaml.YAMLError):
+            pass  # noqa: S110 - Fallback file optional
 
     # Environment variable overrides
     if "EXTRACTOR_DOWNLOAD_DIR" in os.environ:

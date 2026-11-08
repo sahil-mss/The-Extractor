@@ -46,8 +46,8 @@ def log(msg: str):
     try:
         with open(LOG_FILE, "a", encoding="utf-8") as f:
             f.write(formatted + "\n")
-    except Exception:
-        pass  # noqa: S110
+    except OSError as e:
+        print(f"[!] Warning: Could not write to log file: {e}", file=sys.stderr)
 
 
 def get_base_python() -> list[str]:
