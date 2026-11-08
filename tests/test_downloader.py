@@ -533,3 +533,56 @@ def test_storage_stats_caching(tmp_path, monkeypatch):
     stats3 = downloader.get_storage_stats(test_dir)
     assert stats3["file_count"] == 1
     assert scanned_count > initial_scans
+
+
+def test_expand_playlist_urls_mocked(monkeypatch):
+    import downloader
+
+    def mock_extract_info(self, url, download=False):
+        return {
+            "entries": [
+                {"id": "vid1", "title": "Track 1"},
+                {"id": "vid2", "title": "Track 2"},
+                None,
+                {"id": "vid3", "title": "Track 3"},
+            ]
+        }
+
+    monkeypatch.setattr(downloader.yt_dlp.YoutubeDL, "extract_info", mock_extract_info)
+    items = downloader.expand_playlist_urls("https://www.youtube.com/playlist?list=PL12345", max_items=2)
+    assert len(items) == 2
+    assert items[0]["id"] == "vid1"
+    assert items[0]["url"] == "https://www.youtube.com/watch?v=vid1"
+    assert items[1]["id"] == "vid2"
+
+
+def test_fetch_comments_data_mocked(monkeypatch):
+    import downloader
+
+    def mock_extract_info(self, url, download=False):
+        return {
+            "comments": [
+                {"id": "c1", "author": "Alice", "text": "Great song!"},
+                {"id": "c2", "author": "Bob", "text": "Loved this."},
+            ]
+        }
+
+    monkeypatch.setattr(downloader.yt_dlp.YoutubeDL, "extract_info", mock_extract_info)
+
+    # 1. Successful extraction
+    comments = downloader.fetch_comments_data("https://www.youtube.com/watch?v=dQw4w9WgXcQ", max_comments=10)
+    assert len(comments) == 2
+    assert comments[0]["author"] == "Alice"
+
+    # 2. Cancelled early
+    cancelled_comments = downloader.fetch_comments_data(
+        "https://www.youtube.com/watch?v=dQw4w9WgXcQ", is_cancelled=lambda: True
+    )
+    assert cancelled_comments == []
+
+    # 3. Extraction failure raises CommentsUnavailable
+    monkeypatch.setattr(downloader.yt_dlp.YoutubeDL, "extract_info", lambda self, url, download=False: None)
+    import pytest
+
+    with pytest.raises(downloader.CommentsUnavailable):
+        downloader.fetch_comments_data("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
