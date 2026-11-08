@@ -131,6 +131,10 @@ def test_known_output_dirs_trust_revocation(tmp_path, monkeypatch):
     monkeypatch.setattr(config.paths, "allow_any_output_dir", False)
     assert database.is_safe_download_path(str(sample_file)) is False
 
+    # Verify that the downloads root itself and custom root itself are NOT safe as files
+    assert database.is_safe_download_path(config.absolute_download_dir) is False
+    assert database.is_safe_download_path(str(arbitrary_root)) is False
+
     # 3. But if recorded as an exact file in extraction_history, exact matching recognizes it
     assert database.is_known_media_file_in_history(str(sample_file)) is False
     database.record_task_completed(

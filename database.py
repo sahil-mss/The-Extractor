@@ -234,7 +234,7 @@ def is_safe_download_path(file_path: str) -> bool:
 
         for d in allowed_dirs:
             root = Path(d)
-            if (real_target.is_relative_to(root) and real_target != root) or real_target == root:
+            if real_target.is_relative_to(root) and real_target != root:
                 return True
         return False
     except Exception:
