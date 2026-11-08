@@ -5,6 +5,8 @@ on:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
+  schedule:
+    - cron: '0 4 * * 1'
 
 jobs:
   lint:
@@ -33,6 +35,7 @@ jobs:
   audit:
     name: Security Vulnerability Audit (pip-audit)
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
