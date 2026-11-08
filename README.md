@@ -348,7 +348,7 @@ To download age-restricted or bot-protected YouTube videos:
    paths:
      cookies_file: "cookies.txt"
    ```
-4. Restart the server. The settings drawer in the web interface will display `Cookies Configured: ✅ Yes`.
+4. Restart the server. The settings drawer in the web interface will display `Cookies Configured: Yes`.
 
 ---
 
