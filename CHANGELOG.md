@@ -17,6 +17,7 @@ All notable changes to **The Extractor** will be documented in this file.
 - **Bandit Security Rule Enforcement**: Activated Ruff Bandit rules (`S`) with codebase annotations and per-file test exclusions.
 
 ### Code Quality, Tooling & Testing
+- **CI Workflow Parsing & Actionlint**: Fixed leading negation syntax in `ci.yml` `if:` conditional to ensure valid YAML parsing across all runners, and integrated `actionlint` into `.pre-commit-config.yaml` to validate workflow files on commit.
 - **Source-Only Code Coverage Scoping**: Configured `tool.coverage.run` to omit tests and virtual environments, aligning `--cov-fail-under=75` with source code metrics on Ubuntu 3.12 CI jobs.
 - **Ruff Formatting Standardization**: Applied `ruff format` repository-wide, pinned `ruff==0.17.4` across dependencies and pre-commit hooks, and added `ruff format --check .` to CI lint validation.
 - **Cleanup Error Visibility**: Instrumented `perform_storage_cleanup()` to log file deletion errors, track `failed_deletions`, and surface failed counts via the `/api/storage/cleanup` API response and UI toast notifications.

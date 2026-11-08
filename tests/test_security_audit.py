@@ -791,3 +791,17 @@ def test_dockerfile_custom_uid_environment():
     assert "HOME=/tmp" in content
     assert "DENO_DIR=/tmp/.deno" in content
     assert "PIP_CACHE_DIR=/tmp/.pip-cache" in content
+
+
+def test_github_workflows_valid_yaml():
+    import glob
+
+    import yaml
+
+    workflow_files = glob.glob(os.path.join(os.path.dirname(__file__), "..", ".github", "workflows", "*.yml"))
+    assert len(workflow_files) >= 1
+    for wf in workflow_files:
+        with open(wf, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+            assert isinstance(data, dict)
+            assert "name" in data

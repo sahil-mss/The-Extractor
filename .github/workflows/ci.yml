@@ -108,7 +108,7 @@ jobs:
           pytest -v --cov=. --cov-fail-under=75
 
       - name: Run Pytest (Matrix OS / Python)
-        if: !(matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12')
+        if: matrix.os != 'ubuntu-latest' || matrix.python-version != '3.12'
         run: |
           pytest -v
 
