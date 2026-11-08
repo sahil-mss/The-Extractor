@@ -23,11 +23,12 @@ jobs:
       - name: Install Ruff
         run: |
           python -m pip install --upgrade pip
-          pip install ruff
+          pip install ruff==0.17.4
 
-      - name: Run Ruff Linter
+      - name: Run Ruff Linter & Format Check
         run: |
           ruff check .
+          ruff format --check .
 
   audit:
     name: Security Vulnerability Audit (pip-audit)
